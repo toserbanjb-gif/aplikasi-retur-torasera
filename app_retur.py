@@ -450,7 +450,7 @@ if not df_semua.empty and "tgl_input" in df_semua.columns:
         mode='lines+markers',
         line=dict(color=warna_garis, width=4),
         marker=dict(size=8),
-        hoovertemplate='Tanggal: %{x}<br>Total: Rp %{y:,.0f}<extra></extra>'
+        hovertemplate='Tanggal: %{x}<br>Total: Rp %{y:,.0f}<extra></extra>'
     ))
 
     fig.update_layout(

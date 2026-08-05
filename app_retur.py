@@ -151,6 +151,37 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
     return df
 
 
+def cek_barang_duplikat(supplier, kode, nama):
+    """Mengecek apakah barang dengan supplier, kode, atau nama yang sama sudah ada di database."""
+    query = supabase.table("barang_retur").select("id, kode, nama, supplier")
+    if supplier and supplier != "Belum Tau":
+        query = query.eq("supplier", supplier)
+    response = query.execute()
+    
+    if not response.data:
+        return False
+    
+    df_existing = pd.DataFrame(response.data)
+    if df_existing.empty:
+        return False
+    
+    # Cek berdasarkan kesamaan Kode (jika kode tidak kosong/ '-') atau Nama Barang
+    kw_nama = nama.strip().lower()
+    kw_kode = kode.strip().lower() if kode else ""
+    
+    for _, row in df_existing.iterrows():
+        db_nama = str(row["nama"]).strip().lower()
+        db_kode = str(row["kode"]).strip().lower() if row["kode"] else ""
+        
+        match_nama = (db_nama == kw_nama) and (kw_nama != "")
+        match_kode = (db_kode == kw_kode) and (kw_kode != "" and kw_kode != "-")
+        
+        if match_nama or match_kode:
+            return True
+            
+    return False
+
+
 def parse_pasted_retur_data(pasted_text):
     lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
     if not lines:
@@ -329,9 +360,9 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
         if st.button("✅ Ya, Benar Disetujui", type="primary", use_container_width=True):
             for item_id in id_list:
                 if status_baru == "Sukses":
-                    supabase.table("barang_retur").update({"status": status_baru, "qty": 0, "total": 0}).eq("id", item_id).execute()
+                    supabase.table("barang_retur").update({"status": status_baru, "qty": 0, "total": 0}).eq("id", int(item_id)).execute()
                 else:
-                    supabase.table("barang_retur").update({"status": status_baru}).eq("id", item_id).execute()
+                    supabase.table("barang_retur").update({"status": status_baru}).eq("id", int(item_id)).execute()
 
             st.success(f"Berhasil memperbarui status barang menjadi '{status_baru}'!")
             st.rerun()
@@ -395,10 +426,15 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                 if not f_in_nama.strip():
                     st.error("Nama barang tidak boleh kosong!")
                 else:
+                    # Pengecekan duplikat berdasarkan nama atau kode
+                    is_duplicate = cek_barang_duplikat(f_in_sup, f_in_kode, f_in_nama)
+                    if is_duplicate:
+                        st.warning("⚠️ Peringatan: Barang dengan Nama atau Kode tersebut sudah terdaftar di database untuk supplier ini!")
+                    
                     total_val = f_in_qty * f_in_hpp if f_in_status != "Sukses" else 0
                     payload = {
                         "supplier": f_in_sup,
-                        "kode": f_in_kode,
+                        "kode": f_in_kode if f_in_kode else "-",
                         "nama": f_in_nama,
                         "qty": f_in_qty if f_in_status != "Sukses" else 0,
                         "hpp": f_in_hpp,
@@ -535,7 +571,7 @@ if not df_retur.empty:
                 dialog_konfirmasi_setujui(selected_ids, status_baru_massal)
             else:
                 for item_id in selected_ids:
-                    supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", item_id).execute()
+                    supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", int(item_id)).execute()
                 st.success(f"Berhasil memperbarui status menjadi '{status_baru_massal}'!")
                 st.rerun()
 
@@ -567,7 +603,7 @@ if not df_retur.empty:
                 st.warning("Pilih data yang ingin dihapus terlebih dahulu.")
             else:
                 for item_id in selected_ids:
-                    supabase.table("barang_retur").delete().eq("id", item_id).execute()
+                    supabase.table("barang_retur").delete().eq("id", int(item_id)).execute()
                 st.success("Data berhasil dihapus!")
                 st.rerun()
 else:

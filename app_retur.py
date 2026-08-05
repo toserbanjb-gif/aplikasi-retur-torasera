@@ -156,7 +156,7 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
 
 
 def parse_pasted_retur_data(pasted_text):
-    """Merapikan & memproses string hasil copy-paste baris data retur ke dalam DataFrame pandas."""
+    """Merapikan & memproses string hasil copy-paste tabel aplikasi (termasuk kolom ID/Checkbox) ke DataFrame."""
     lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
     if not lines:
         return pd.DataFrame()
@@ -165,7 +165,8 @@ def parse_pasted_retur_data(pasted_text):
     for line in lines:
         cols = re.split(r"\t+|\s{2,}", line)
         if len(cols) >= 2:
-            if any(h in cols[0].lower() or h in cols[1].lower() for h in ["no", "kode", "status", "barang"]):
+            # Skip baris header jika ikut tersalin
+            if any(h in cols[0].lower() or (len(cols) > 1 and h in cols[1].lower()) for h in ["pilih", "id", "kode", "status", "barang"]):
                 continue
 
             def clean_num(val):
@@ -175,13 +176,51 @@ def parse_pasted_retur_data(pasted_text):
                 except:
                     return 0
 
-            # Fleksibilitas urutan kolom hasil paste: [Kode, Nama, Qty, HPP, Ket, ED]
-            kode = cols[0] if len(cols) > 0 else "-"
-            nama = cols[1] if len(cols) > 1 else "Barang Retur"
-            qty = int(clean_num(cols[2])) if len(cols) > 2 and clean_num(cols[2]) > 0 else 1
-            hpp = clean_num(cols[3]) if len(cols) > 3 else 0
-            ket = cols[4] if len(cols) > 4 else "Rusak"
-            ed = cols[5] if len(cols) > 5 else "-"
+            # Deteksi apakah kolom pertama adalah Checkbox/ID (artinya disalin langsung dari tabel web app)
+            # Format tabel web: [Checkbox/Kosong, ID, Kode, Nama Barang, Qty, HPP, Total, Keterangan, ED, Supplier, Status, Tgl]
+            # Atau format manual ringkas: [Kode, Nama, Qty, HPP, Ket, ED]
+            
+            # Cek jika kolom kedua atau ketiga berupa angka ID (misal integer pendek atau angka murni)
+            shift = 0
+            if len(cols) > 2 and cols[0] in ["", "True", "False"] and cols[1].isdigit():
+                shift = 2  # Lewati kolom checkbox & ID
+            elif len(cols) > 1 and cols[0].isdigit() and len(cols[0]) <= 4:
+                shift = 1  # Lewati kolom ID saja
+
+            actual_cols = cols[shift:]
+
+            if len(actual_cols) < 2:
+                continue
+
+            kode = actual_cols[0] if len(actual_cols) > 0 else "-"
+            nama = actual_cols[1] if len(actual_cols) > 1 else "Barang Retur"
+            qty = int(clean_num(actual_cols[2])) if len(actual_cols) > 2 and clean_num(actual_cols[2]) > 0 else 1
+            hpp = clean_num(actual_cols[3]) if len(actual_cols) > 3 else 0
+            
+            # Kolom Total ada di index 4 jika format lengkap tabel, kita cek apakah kolom ke-4 adalah angka besar/hasil perkalian
+            # Urutan standar tabel: [Kode(0), Nama(1), Qty(2), HPP(3), Total(4), Ket(5), ED(6), Supplier(7), Status(8)]
+            # Urutan paste lengkap dari UI: Kode, Nama, Qty, HPP, Total, Ket, ED, Supplier, Status
+            
+            ket = "Rusak"
+            ed = "-"
+            supp_parsed = None
+            stat_parsed = "Pengajuan"
+
+            if len(actual_cols) > 5 and not actual_cols[4].replace('.', '', 1).isdigit():
+                # Jika kolom ke-4 bukan angka, berarti itu Keterangan (format lama/ringkas)
+                ket = actual_cols[4]
+                ed = actual_cols[5] if len(actual_cols) > 5 else "-"
+            else:
+                # Format tabel lengkap dari UI aplikasi
+                # [0:Kode, 1:Nama, 2:Qty, 3:HPP, 4:Total, 5:Ket, 6:ED, 7:Supplier, 8:Status]
+                if len(actual_cols) > 5:
+                    ket = actual_cols[5]
+                if len(actual_cols) > 6:
+                    ed = actual_cols[6]
+                if len(actual_cols) > 7:
+                    supp_parsed = actual_cols[7]
+                if len(actual_cols) > 8:
+                    stat_parsed = actual_cols[8]
 
             subtotal = qty * hpp
 
@@ -192,7 +231,9 @@ def parse_pasted_retur_data(pasted_text):
                 "HPP": hpp,
                 "Total": subtotal,
                 "Keterangan": ket,
-                "ED": ed
+                "ED": ed,
+                "Supplier": supp_parsed,
+                "Status": stat_parsed
             })
 
     return pd.DataFrame(parsed_rows)
@@ -390,13 +431,13 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=
 
     with tab_form_paste:
         st.subheader("📋 Input Retur Massal via Copy-Paste")
-        st.markdown("Blok tabel atau baris data dari Excel/Notepad, lalu *paste* ke dalam kotak di bawah ini:")
+        st.markdown("Anda bisa langsung *copy* baris data langsung dari tabel aplikasi di bawah, lalu *paste* ke sini:")
         
-        paste_sup = st.selectbox("Pilih Supplier untuk Data Paste Ini", DAFTAR_SUPPLIER, key="paste_sup_target")
+        paste_sup_default = st.selectbox("Pilih Supplier Default (jika dari hasil copy tabel tidak membawa nama supplier)", DAFTAR_SUPPLIER, key="paste_sup_target")
         raw_paste_text = st.text_area(
-            "Paste Baris Data Retur (Format kolom: Kode | Nama Barang | Qty | HPP | Ket | ED):",
+            "Paste Baris Tabel Retur di Sini:",
             height=150,
-            placeholder="Contoh:\n8991234567890\tSunsilk Shampoo 170ml\t2\t15500\tRusak\t2026-12-31"
+            placeholder="Contoh langsung paste dari tabel:\n14\t6922360002156\tginbis dream animals...\t1\t16539\t16539\tEd\t29-07-26\tPT WIRA SADANA..."
         )
 
         if raw_paste_text:
@@ -408,8 +449,12 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=
                 if st.button("💾 Simpan Semua Data Paste ke Database Retur", type="primary"):
                     records_to_insert = []
                     for _, r in df_parsed_retur.iterrows():
+                        # Gunakan supplier dari hasil paste jika terbaca, jika tidak pakai pilihan default di atas
+                        final_supp = r["Supplier"] if r["Supplier"] and r["Supplier"] in DAFTAR_SUPPLIER else paste_sup_default
+                        final_stat = r["Status"] if r["Status"] in DAFTAR_STATUS else "Pengajuan"
+                        
                         records_to_insert.append({
-                            "supplier": paste_sup,
+                            "supplier": final_supp,
                             "kode": str(r["Kode"]),
                             "nama": str(r["Nama Barang"]),
                             "qty": int(r["Qty"]),
@@ -417,14 +462,14 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=
                             "total": float(r["Total"]),
                             "ket": str(r["Keterangan"]),
                             "ed": str(r["ED"]),
-                            "status": "Pengajuan",
+                            "status": final_stat,
                             "tgl_input": str(datetime.date.today())
                         })
                     supabase.table("barang_retur").insert(records_to_insert).execute()
                     st.success(f"Berhasil menyimpan {len(records_to_insert)} item barang retur ke database!")
                     st.rerun()
             else:
-                st.warning("Format teks belum terbaca dengan benar. Pastikan tabel disalin dengan pemisah kolom (Tab/Spasi).")
+                st.warning("Format teks belum terbaca dengan benar. Pastikan menyalin baris data secara lengkap dari tabel.")
 
 st.divider()
 

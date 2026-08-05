@@ -175,15 +175,12 @@ def parse_pasted_retur_data(pasted_text):
                 except:
                     return 0
 
-            # Deteksi & buang elemen checkbox/ID di awal baris hasil copy tabel web
             clean_cols = []
             for c in cols:
-                # Lewati kolom yang berupa status centang (true/false) atau angka ID murni pendek di kolom awal
                 if c in ["True", "False", ""]:
                     continue
                 clean_cols.append(c)
 
-            # Jika elemen pertama adalah angka ID (misal angka 14, 15, dst), buang elemen tersebut
             if clean_cols and clean_cols[0].isdigit() and len(clean_cols[0]) <= 5 and not clean_cols[0].startswith("8"):
                 clean_cols.pop(0)
 
@@ -370,9 +367,9 @@ if not df_semua.empty:
 
 st.divider()
 
-# Bagian 2: Tambah Barang Retur Baru (Form Satuan & Copy-Paste Massal)
-with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=False):
-    tab_form_satuan, tab_form_paste = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data Retur"])
+# Bagian 2: Tambah Barang Retur Baru (Form Satuan, Copy-Paste, & Upload CSV)
+with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", expanded=False):
+    tab_form_satuan, tab_form_paste, tab_form_csv = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data", "📁 Upload File CSV"])
 
     with tab_form_satuan:
         with st.form("form_tambah_retur", clear_on_submit=True):
@@ -460,6 +457,74 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=
                     st.rerun()
             else:
                 st.warning("Format teks belum terbaca dengan benar. Pastikan menyalin baris data secara lengkap dari tabel.")
+
+    with tab_form_csv:
+        st.subheader("📁 Upload File CSV Retur Barang")
+        st.markdown("Unggah file berformat CSV yang berisi data retur. Pastikan kolom minimal mencakup: `kode`, `nama`, `qty`, `hpp` (atau sesuaikan dengan mapping di bawah jika diperlukan).")
+        
+        csv_sup_default = st.selectbox("Pilih Supplier Default untuk File CSV ini", DAFTAR_SUPPLIER, key="csv_sup_target")
+        uploaded_csv = st.file_uploader("Pilih file CSV", type=["csv"])
+
+        if uploaded_csv is not None:
+            try:
+                # Coba baca CSV (bisa menyesuaikan separator koma atau titik koma)
+                df_csv = pd.read_csv(uploaded_csv)
+                st.markdown("**Preview Data dari CSV:**")
+                st.dataframe(df_csv.head(5), use_container_width=True)
+
+                if st.button("💾 Proses & Simpan Data CSV ke Database", type="primary"):
+                    records_to_insert = []
+                    # Normalisasi nama kolom menjadi huruf kecil agar mudah dicocokkan
+                    df_csv.columns = [str(c).strip().lower() for c in df_csv.columns]
+                    
+                    for _, row in df_csv.iterrows():
+                        # Deteksi kolom secara fleksibel berdasarkan nama umum
+                        kode = str(row.get("kode", row.get("barcode", "-")))
+                        nama = str(row.get("nama", row.get("nama barang", row.get("barang", "Barang Retur"))))
+                        
+                        try:
+                            qty = int(float(str(row.get("qty", row.get("jumlah", 1))).replace(",", ".")))
+                        except:
+                            qty = 1
+
+                        try:
+                            hpp = float(str(row.get("hpp", row.get("harga", 0))).replace(",", "").replace(".", ""))
+                            # Jika format hpp menggunakan titik sebagai pemisah ribuan standar indonesia, sesuaikan jika perlu:
+                            # Contoh sederhana: jika angka terlalu kecil atau ada titik ribuan, sesuaikan. Di sini kita ambil float standar.
+                        except:
+                            hpp = 0.0
+
+                        ket = str(row.get("ket", row.get("keterangan", "Rusak")))
+                        ed = str(row.get("ed", row.get("expired", "-")))
+                        
+                        # Cek kolom supplier/status jika ada di CSV
+                        sup_from_csv = row.get("supplier", None)
+                        final_supp = sup_from_csv if sup_from_csv and str(sup_from_csv) in DAFTAR_SUPPLIER else csv_sup_default
+                        
+                        stat_from_csv = row.get("status", "Pengajuan")
+                        final_stat = stat_from_csv if str(stat_from_csv) in DAFTAR_STATUS else "Pengajuan"
+
+                        subtotal = qty * hpp if final_stat != "Sukses" else 0
+                        final_qty = qty if final_stat != "Sukses" else 0
+
+                        records_to_insert.append({
+                            "supplier": final_supp,
+                            "kode": kode,
+                            "nama": nama,
+                            "qty": final_qty,
+                            "hpp": hpp,
+                            "total": subtotal,
+                            "ket": ket,
+                            "ed": ed,
+                            "status": final_stat,
+                            "tgl_input": str(datetime.date.today())
+                        })
+
+                    supabase.table("barang_retur").insert(records_to_insert).execute()
+                    st.success(f"Berhasil mengimpor dan menyimpan {len(records_to_insert)} data dari file CSV!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Gagal membaca file CSV. Pastikan format file benar. Detail error: {e}")
 
 st.divider()
 

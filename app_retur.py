@@ -34,11 +34,6 @@ st.markdown("""
         color: #E2E8F0 !important;
     }
 
-    /* Perbaikan styling card / kontainer agar ada efek bayangan lembut (shadow) */
-    div.element-container, div[data-testid="stExpander"] {
-        color: #1E293B;
-    }
-
     /* Kustomisasi Judul Header agar tegas & rapi */
     h1, h2, h3 {
         color: #0F172A;
@@ -418,7 +413,20 @@ st.markdown("<p style='color: #64748B; margin-top: -10px;'>Kelola pencatatan dan
 
 df_semua = ambil_data_retur()
 
-# --- STATISTIK KARTU METRIK BERSIH DI ATAS ---
+# --- 1. GRAFIK TREN DI BAGIAN ATAS ---
+st.markdown("### 📈 Grafik Tren Nilai Retur over Time")
+if not df_semua.empty and "tgl_input" in df_semua.columns:
+    # Mengelompokkan data berdasarkan tanggal input dan menjumlahkan total nominal retur
+    df_chart = df_semua.groupby("tgl_input")["total"].sum().reset_index()
+    df_chart = df_chart.sort_values("tgl_input")
+    df_chart = df_chart.set_index("tgl_input")
+    st.line_chart(df_chart, use_container_width=True)
+else:
+    st.info("Belum cukup data tanggal untuk menampilkan grafik tren.")
+
+st.divider()
+
+# --- 2. STATISTIK KARTU METRIK ---
 col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 total_retur_count = len(df_semua)
 total_supplier_count = df_semua["supplier"].nunique() if not df_semua.empty else 0

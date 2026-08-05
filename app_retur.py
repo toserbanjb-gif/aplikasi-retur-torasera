@@ -1,6 +1,5 @@
 import datetime
 import io
-import re
 from io import BytesIO
 import pandas as pd
 import streamlit as st
@@ -124,53 +123,8 @@ DAFTAR_SUPPLIER = [
     "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG",
 ]
 DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
-DAFTAR_STATUS_PESANAN = ["Pending", "Diproses", "Selesai", "Dibatalkan"]
 
 
-def parse_pasted_po_data(pasted_text):
-    """Merapikan & memproses string hasil copy-paste tabel nota PO ke dalam DataFrame pandas."""
-    lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
-    if not lines:
-        return pd.DataFrame()
-
-    parsed_rows = []
-    for line in lines:
-        cols = re.split(r"\t+|\s{2,}", line)
-        if len(cols) >= 5:
-            if any(h in cols[0].lower() or h in cols[1].lower() for h in ["no", "kode", "status", "barang"]):
-                continue
-
-            def clean_num(val):
-                v = re.sub(r"[^\d.]", "", str(val).replace(",", "."))
-                try:
-                    return float(v) if "." in v else int(v) if v else 0
-                except:
-                    return 0
-
-            kode = cols[2] if len(cols) > 2 else cols[0]
-            nama = cols[5] if len(cols) > 5 else cols[1]
-
-            hpp = clean_num(cols[6]) if len(cols) > 6 else 0
-            harga_order = clean_num(cols[8]) if len(cols) > 8 else 0
-            qty = int(clean_num(cols[11])) if len(cols) > 11 else int(clean_num(cols[-2])) if len(cols) > 2 else 1
-            subtotal = clean_num(cols[12]) if len(cols) > 12 else clean_num(cols[-1])
-
-            if subtotal == 0 and qty > 0 and harga_order > 0:
-                subtotal = qty * harga_order
-
-            parsed_rows.append({
-                "Kode": kode,
-                "Nama Barang": nama,
-                "HPP": hpp,
-                "Harga Order": harga_order,
-                "Qty": qty,
-                "Subtotal": subtotal
-            })
-
-    return pd.DataFrame(parsed_rows)
-
-
-# --- FUNGSI INTERAKSI SUPABASE ---
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
     try:
         query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
@@ -200,62 +154,7 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
 
 
-def ambil_data_diskontinu(filter_supplier="SEMUA SUPPLIER", cari=""):
-    try:
-        query = supabase.table("barang_diskontinu").select("id, kode, nama, kategori, supplier, alasan, tgl_diskontinu")
-        if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
-            query = query.eq("supplier", filter_supplier)
-        
-        response = query.execute()
-
-        if not response.data:
-            return pd.DataFrame(columns=["id", "kode", "nama", "kategori", "supplier", "alasan", "tgl_diskontinu"])
-
-        df = pd.DataFrame(response.data)
-
-        if cari:
-            kw = cari.lower()
-            df = df[
-                df["kode"].astype(str).str.lower().str.contains(kw) |
-                df["nama"].astype(str).str.lower().str.contains(kw) |
-                df["kategori"].astype(str).str.lower().str.contains(kw) |
-                df["supplier"].astype(str).str.lower().str.contains(kw) |
-                df["alasan"].astype(str).str.lower().str.contains(kw)
-            ]
-        return df
-    except Exception as e:
-        return pd.DataFrame(columns=["id", "kode", "nama", "kategori", "supplier", "alasan", "tgl_diskontinu"])
-
-
-def ambil_data_pesanan(filter_status="SEMUA STATUS", cari=""):
-    try:
-        query = supabase.table("pesanan_customer").select("id, nama_customer, no_hp, kode_barang, nama_barang, qty, harga, total, tgl_pesan, status, catatan")
-        if filter_status and filter_status != "SEMUA STATUS":
-            query = query.eq("status", filter_status)
-            
-        response = query.execute()
-
-        if not response.data:
-            return pd.DataFrame(columns=["id", "nama_customer", "no_hp", "kode_barang", "nama_barang", "qty", "harga", "total", "tgl_pesan", "status", "catatan"])
-
-        df = pd.DataFrame(response.data)
-
-        if cari:
-            kw = cari.lower()
-            df = df[
-                df["nama_customer"].astype(str).str.lower().str.contains(kw) |
-                df["no_hp"].astype(str).str.lower().str.contains(kw) |
-                df["kode_barang"].astype(str).str.lower().str.contains(kw) |
-                df["nama_barang"].astype(str).str.lower().str.contains(kw) |
-                df["status"].astype(str).str.lower().str.contains(kw)
-            ]
-        return df
-    except Exception as e:
-        return pd.DataFrame(columns=["id", "nama_customer", "no_hp", "kode_barang", "nama_barang", "qty", "harga", "total", "tgl_pesan", "status", "catatan"])
-
-
-# --- FUNGSI GENERATE PDF ---
-def generate_pdf(df_data, supplier_label):
+def generate_pdf_retur(df_data, supplier_label):
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -347,249 +246,6 @@ def generate_pdf(df_data, supplier_label):
     return buffer
 
 
-def generate_pdf_diskontinu(df_data, supplier_label):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=(210 * mm, 297 * mm),
-        rightMargin=12 * mm,
-        leftMargin=12 * mm,
-        topMargin=12 * mm,
-        bottomMargin=12 * mm,
-    )
-    story = []
-    styles = getSampleStyleSheet()
-
-    company_style = ParagraphStyle("Company", parent=styles["Heading2"], fontSize=15, alignment=1, spaceAfter=2, fontName="Helvetica-Bold")
-    subtitle_style = ParagraphStyle("SubTitle", parent=styles["Normal"], fontSize=9, alignment=1, spaceAfter=10, textColor=colors.HexColor("#4A5568"))
-    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=13, alignment=1, spaceAfter=12, textColor=colors.HexColor("#C53030"), fontName="Helvetica-Bold")
-    body_style = ParagraphStyle("Body", parent=styles["Normal"], fontSize=9, leading=14, spaceAfter=8)
-    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=11)
-    cell_center = ParagraphStyle("CellCenter", parent=styles["Normal"], fontSize=8, alignment=1, leading=11)
-
-    story.append(Paragraph("TORASERA NURJA BERKAH", company_style))
-    story.append(Paragraph("Jl. Raya Nurul Jadid, Paiton, Probolinggo - Jawa Timur", subtitle_style))
-    story.append(Spacer(1, 5))
-
-    story.append(Paragraph("SURAT PEMBERITAHUAN RETUR / DELIST BARANG DISKONTINU", title_style))
-
-    tgl_surat = datetime.datetime.now().strftime("%d %B %Y")
-    info_surat = [
-        [Paragraph(f"<b>Tanggal:</b> {tgl_surat}", body_style)],
-        [Paragraph(f"<b>Kepada Yth:</b> Pimpinan / Sales Manager {supplier_label}", body_style)],
-        [Paragraph("<b>Perihal:</b> Pemberitahuan Penarikan / Retur Barang Diskontinu", body_style)],
-    ]
-    story.append(Table(info_surat, colWidths=[186 * mm]))
-    story.append(Spacer(1, 8))
-
-    salam_text = (
-        "<b>Assalamu'alaikum Wr. Wb.</b><br/><br/>"
-        "Dengan hormat,<br/>"
-        "Bersama surat ini, kami dari pihak manajemen <b>Torasera Nurja Berkah</b> memberitahukan "
-        "bahwa daftar item di bawah ini telah dikategorikan sebagai <b>Barang Diskontinu</b> (tidak dijual/dipasok lagi). "
-        "Oleh karena itu, kami mengajukan penarikan/retur barang atau pembersihan data persediaan (delist) untuk daftar produk berikut:"
-    )
-    story.append(Paragraph(salam_text, body_style))
-    story.append(Spacer(1, 8))
-
-    data_tabel = [[
-        Paragraph("<b>No</b>", cell_center),
-        Paragraph("<b>Kode / Barcode</b>", cell_center),
-        Paragraph("<b>Nama Barang</b>", cell_style),
-        Paragraph("<b>Kategori</b>", cell_center),
-        Paragraph("<b>Supplier</b>", cell_style),
-        Paragraph("<b>Alasan Diskontinu</b>", cell_style),
-        Paragraph("<b>Tgl Diskontinu</b>", cell_center),
-    ]]
-
-    no = 1
-    for _, r in df_data.iterrows():
-        data_tabel.append([
-            Paragraph(str(no), cell_center),
-            Paragraph(str(r["kode"]), cell_center),
-            Paragraph(str(r["nama"]), cell_style),
-            Paragraph(str(r["kategori"]), cell_center),
-            Paragraph(str(r["supplier"]), cell_style),
-            Paragraph(str(r["alasan"]), cell_style),
-            Paragraph(str(r["tgl_diskontinu"]), cell_center),
-        ])
-        no += 1
-
-    tabel_b = Table(data_tabel, colWidths=[8 * mm, 28 * mm, 48 * mm, 22 * mm, 38 * mm, 25 * mm, 17 * mm])
-    tabel_b.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#C53030")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
-        ("BACKGROUND", (0, 1), (-1, -1), colors.HexColor("#FFF5F5")),
-    ]))
-    story.append(tabel_b)
-    story.append(Spacer(1, 10))
-
-    penutup_text = (
-        "Demikian surat pemberitahuan ini kami sampaikan agar dapat ditindaklanjuti sesuai dengan kesepakatan retur "
-        "maupun penyelesaian administrasi bersama. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.<br/><br/>"
-        "<b>Wassalamu'alaikum Wr. Wb.</b>"
-    )
-    story.append(Paragraph(penutup_text, body_style))
-    story.append(Spacer(1, 15))
-
-    data_ttd = [
-        [Paragraph("<b>Hormat Kami,</b><br/>Torasera Nurja Berkah", body_style), Paragraph(f"<b>Menerima & Mengetahui,</b><br/>{supplier_label}", body_style)],
-        ["\n\n\n________________________", "\n\n\n________________________"],
-        [Paragraph("<b>( Tim Management / Admin )</b>", body_style), Paragraph("<b>( Sales / Distributor )</b>", body_style)],
-    ]
-    tabel_ttd = Table(data_ttd, colWidths=[93 * mm, 93 * mm])
-    story.append(tabel_ttd)
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-
-def generate_pdf_rekap_ed(df_rekap, bulan_label):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=(210 * mm, 297 * mm),
-        rightMargin=10 * mm,
-        leftMargin=10 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm,
-    )
-    story = []
-    styles = getSampleStyleSheet()
-
-    company_style = ParagraphStyle("Company", parent=styles["Heading2"], fontSize=14, alignment=1, spaceAfter=2, fontName="Helvetica-Bold")
-    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=12, alignment=1, spaceAfter=10, textColor=colors.HexColor("#DD6B20"), fontName="Helvetica-Bold")
-    normal_style = ParagraphStyle("Text", parent=styles["Normal"], fontSize=9)
-    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
-    cell_center = ParagraphStyle("CellCenter", parent=styles["Normal"], fontSize=8, alignment=1, leading=10)
-
-    story.append(Paragraph("TORASERA NURJA BERKAH", company_style))
-    story.append(Paragraph(f"LAPORAN REKAP RETUR ED BULANAN ({bulan_label})", title_style))
-
-    tgl = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-    story.append(Paragraph(f"<b>Tanggal Cetak:</b> {tgl}", normal_style))
-    story.append(Spacer(1, 8))
-
-    data_tabel = [[
-        Paragraph("<b>Kode</b>", cell_center),
-        Paragraph("<b>Nama Barang</b>", cell_style),
-        Paragraph("<b>Supplier</b>", cell_style),
-        Paragraph("<b>Frekuensi Retur ED</b>", cell_center),
-        Paragraph("<b>Total Qty ED</b>", cell_center),
-        Paragraph("<b>Rekomendasi Evaluasi</b>", cell_center),
-    ]]
-
-    for _, r in df_rekap.iterrows():
-        rekom = "Rekomendasi Diskontinu" if r["rekomendasi_dis"] else "Normal / Pantau"
-        data_tabel.append([
-            Paragraph(str(r["kode"]), cell_center),
-            Paragraph(str(r["nama"]), cell_style),
-            Paragraph(str(r["supplier"]), cell_style),
-            Paragraph(f"{r['frekuensi_ed']}x", cell_center),
-            Paragraph(str(r["total_qty_ed"]), cell_center),
-            Paragraph(rekom, cell_center),
-        ])
-
-    tabel_b = Table(data_tabel, colWidths=[28 * mm, 60 * mm, 45 * mm, 22 * mm, 15 * mm, 20 * mm])
-    tabel_b.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DD6B20")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E0")),
-    ]))
-    story.append(tabel_b)
-    story.append(Spacer(1, 20))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-
-def generate_pdf_pesanan(df_data):
-    buffer = BytesIO()
-    doc = SimpleDocTemplate(
-        buffer,
-        pagesize=(210 * mm, 297 * mm),
-        rightMargin=10 * mm,
-        leftMargin=10 * mm,
-        topMargin=10 * mm,
-        bottomMargin=10 * mm,
-    )
-    story = []
-    styles = getSampleStyleSheet()
-
-    company_style = ParagraphStyle("Company", parent=styles["Heading2"], fontSize=14, alignment=1, spaceAfter=2, fontName="Helvetica-Bold")
-    title_style = ParagraphStyle("Title", parent=styles["Heading1"], fontSize=12, alignment=1, spaceAfter=10, textColor=colors.HexColor("#2D3748"), fontName="Helvetica-Bold")
-    normal_style = ParagraphStyle("Text", parent=styles["Normal"], fontSize=9)
-    cell_style = ParagraphStyle("Cell", parent=styles["Normal"], fontSize=8, leading=10)
-    cell_center = ParagraphStyle("CellCenter", parent=styles["Normal"], fontSize=8, alignment=1, leading=10)
-    cell_right = ParagraphStyle("CellRight", parent=styles["Normal"], fontSize=8, alignment=2, leading=10)
-
-    story.append(Paragraph("TORASERA NURJA BERKAH", company_style))
-    story.append(Paragraph("NOTA PESANAN CUSTOMER / PRE-ORDER", title_style))
-
-    tgl = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
-    info_data = [[Paragraph(f"<b>Tgl Cetak:</b> {tgl}", normal_style)]]
-    story.append(Table(info_data, colWidths=[190 * mm]))
-    story.append(Spacer(1, 8))
-
-    data_tabel = [[
-        Paragraph("<b>No</b>", cell_center),
-        Paragraph("<b>Customer</b>", cell_style),
-        Paragraph("<b>No HP</b>", cell_center),
-        Paragraph("<b>Barang</b>", cell_style),
-        Paragraph("<b>Qty</b>", cell_center),
-        Paragraph("<b>Total (Rp)</b>", cell_right),
-        Paragraph("<b>Status</b>", cell_center),
-    ]]
-
-    no = 1
-    grand_total = 0
-    for _, r in df_data.iterrows():
-        data_tabel.append([
-            Paragraph(str(no), cell_center),
-            Paragraph(str(r["nama_customer"]), cell_style),
-            Paragraph(str(r["no_hp"]), cell_center),
-            Paragraph(str(r["nama_barang"]), cell_style),
-            Paragraph(str(r["qty"]), cell_center),
-            Paragraph(f"{r['total']:,.0f}", cell_right),
-            Paragraph(str(r["status"]), cell_center),
-        ])
-        grand_total += r["total"]
-        no += 1
-
-    data_tabel.append([
-        "", "", "",
-        Paragraph("<b>TOTAL</b>", cell_center),
-        "",
-        Paragraph(f"<b>{grand_total:,.0f}</b>", cell_right),
-        "",
-    ])
-
-    tabel_b = Table(data_tabel, colWidths=[10 * mm, 35 * mm, 25 * mm, 55 * mm, 15 * mm, 28 * mm, 22 * mm])
-    tabel_b.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#319795")),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-        ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-        ("GRID", (0, 0), (-1, -2), 0.5, colors.HexColor("#CBD5E0")),
-        ("BACKGROUND", (0, -1), (-1, -1), colors.HexColor("#E6FFFA")),
-        ("LINEABOVE", (0, -1), (-1, -1), 1, colors.HexColor("#319795")),
-    ]))
-    story.append(tabel_b)
-    story.append(Spacer(1, 20))
-
-    doc.build(story)
-    buffer.seek(0)
-    return buffer
-
-
-# --- DIALOG POPUP KONFIRMASI PERSETUJUAN ---
 @st.dialog("⚠️ Konfirmasi Persetujuan Retur")
 def dialog_konfirmasi_setujui(id_list, status_baru):
     st.warning("Apakah barang ini **benar-benar sudah disetujui** oleh supplier?")
@@ -609,7 +265,6 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
                 else:
                     supabase.table("barang_retur").update({"status": status_baru}).eq("id", item_id).execute()
 
-            st.session_state.select_all = False
             st.success(f"Berhasil memperbarui status barang menjadi '{status_baru}'!")
             st.rerun()
 
@@ -618,178 +273,218 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
             st.rerun()
 
 
-# --- NAVIGASI SIDEBAR ---
-st.sidebar.title("📌 Menu Utama")
-menu = st.sidebar.radio(
-    "Pilih Halaman:",
-    [
-        "📈 Analisis PO & Produk Terlaris",
-        "📦 Retur Barang",
-        "📊 Rekap Retur Bulanan & ED",
-        "🚫 Barang Diskontinu",
-        "🛒 Pesanan Customer"
-    ]
-)
+# --- TAMPILAN UTAMA HALAMAN RETUR BARANG ---
+st.title("📦 Retur Barang - Torasera Nurja Berkah")
 
-st.sidebar.markdown("---")
-st.sidebar.caption("Torasera Nurja Berkah © 2026")
+# Bagian 1: Analisis & Grafik Retur Overall
+df_semua = ambil_data_retur()
+if not df_semua.empty:
+    st.markdown("### 📊 Analisis & Grafik Retur Overall")
+    g_col1, g_col2 = st.columns(2)
 
+    with g_col1:
+        st.markdown("**Total Nominal Retur per Supplier**")
+        top_sup_retur = df_semua.groupby("supplier")["total"].sum().reset_index().sort_values(by="total", ascending=False).head(10)
+        st.bar_chart(top_sup_retur.set_index("supplier"))
 
-# ==========================================
-# HALAMAN 1: ANALISIS PO & PRODUK TERLARIS
-# ==========================================
-if menu == "📈 Analisis PO & Produk Terlaris":
-    st.title("📈 Analisis Pembelian PO & Produk Terlaris")
-    st.markdown("Paste tabel nota PO pembelian supplier Anda di bawah ini untuk analisis otomatis bulanan & item paling sering dibeli.")
+    with g_col2:
+        st.markdown("**Status Pengajuan Retur**")
+        status_dist = df_semua.groupby("status")["id"].count().reset_index().rename(columns={"id": "jumlah"})
+        st.bar_chart(status_dist.set_index("status"))
 
-    tab_input, tab_analisis = st.tabs(["📋 Paste & Input PO Baru", "📊 Analisis & Grafik Terlaris"])
+st.divider()
 
-    with tab_input:
-        st.subheader("📥 Input Nota PO Baru (Copy-Paste)")
+# Bagian 2: Tambah Barang Retur Baru
+with st.expander("➕ Tambah Barang Retur Baru", expanded=False):
+    with st.form("form_tambah_retur", clear_on_submit=True):
+        f_in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            f_in_kode = st.text_input("Kode / Barcode")
+        with c2:
+            f_in_qty = st.number_input("Qty", min_value=1, value=1)
 
-        c_p1, c_p2, c_p3 = st.columns(3)
-        with c_p1:
-            po_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER, key="po_sup")
-        with c_p2:
-            po_number = st.text_input("No. PO / Nota Pembelian", value=f"PO-{datetime.datetime.now().strftime('%Y%m%d%H%M')}")
-        with c_p3:
-            po_date = st.date_input("Tanggal Transaksi PO", datetime.date.today())
+        c3, c4 = st.columns(2)
+        with c3:
+            f_in_nama = st.text_input("Nama Barang")
+        with c4:
+            f_in_hpp = st.number_input("HPP (Rp)", min_value=0.0, value=0.0, step=500.0)
 
-        raw_paste = st.text_area(
-            "📋 Paste Tabel Nota PO di sini (Blok tabel dari PDF/Excel lalu CTRL+V):",
-            height=200,
-            placeholder="Contoh format:\n1   sudah   8991038766100   8991038766100   -   CINDERELIA CT BUDS 100s   3.544   2030-12-11   3.258   0   24   24   78.192..."
-        )
+        c5, c6, c7 = st.columns(3)
+        with c5:
+            f_in_ket = st.selectbox("Keterangan (sesuai ED / Rusak)", ["Rusak", "ED", "Lainnya"])
+        with c6:
+            f_in_ed = st.text_input("ED (Contoh: 2026-12-31 atau -)", value="-")
+        with c7:
+            f_in_status = st.selectbox("Status", DAFTAR_STATUS, index=0)
 
-        if raw_paste:
-            df_parsed = parse_pasted_po_data(raw_paste)
-            if not df_parsed.empty:
-                st.subheader("🔍 Preview Data Hasil Ekstraksi Otomatis:")
-                st.dataframe(df_parsed, use_container_width=True)
-
-                if st.button("💾 Simpan Transaksi PO Ini Ke Database", type="primary"):
-                    records = []
-                    for _, r in df_parsed.iterrows():
-                        records.append({
-                            "no_po": po_number,
-                            "supplier": po_supplier,
-                            "kode_barang": str(r["Kode"]),
-                            "nama_barang": str(r["Nama Barang"]),
-                            "qty": int(r["Qty"]),
-                            "hpp": float(r["HPP"]),
-                            "harga_order": float(r["Harga Order"]),
-                            "subtotal": float(r["Subtotal"]),
-                            "tgl_po": str(po_date)
-                        })
-                    supabase.table("pembelian_po").insert(records).execute()
-                    st.success("Data PO berhasil disimpan & masuk ke grafik analisis bulanan!")
-                    st.rerun()
+        submitted = st.form_submit_button("💾 Simpan Barang Retur", type="primary")
+        if submitted:
+            if not f_in_nama.strip():
+                st.error("Nama barang tidak boleh kosong!")
             else:
-                st.error("Gagal membaca struktur tabel. Pastikan baris data memiliki kolom Kode, Nama Barang, Qty, dan Subtotal!")
+                total_val = f_in_qty * f_in_hpp if f_in_status != "Sukses" else 0
+                payload = {
+                    "supplier": f_in_sup,
+                    "kode": f_in_kode,
+                    "nama": f_in_nama,
+                    "qty": f_in_qty if f_in_status != "Sukses" else 0,
+                    "hpp": f_in_hpp,
+                    "total": total_val,
+                    "ket": f_in_ket,
+                    "ed": f_in_ed,
+                    "status": f_in_status,
+                    "tgl_input": str(datetime.date.today())
+                }
+                supabase.table("barang_retur").insert(payload).execute()
+                st.success("Barang retur berhasil ditambahkan!")
+                st.rerun()
 
-    with tab_analisis:
-        st.subheader("📊 Analisis Produk Sering Dibeli / Fast Moving")
+st.divider()
 
-        response = supabase.table("pembelian_po").select("*").execute()
-        df_po_all = pd.DataFrame(response.data)
+# Bagian 3: Filter Tabel Retur
+f_col1, f_col2, f_col3 = st.columns(3)
+with f_col1:
+    filter_sup = st.selectbox("Filter Supplier", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_retur")
+with f_col2:
+    filter_stat = st.selectbox("Filter Status", ["SEMUA STATUS"] + DAFTAR_STATUS, key="f_stat_retur")
+with f_col3:
+    filter_cari = st.text_input("🔍 Cari Kode / Nama / Ket / Supplier / Status", key="f_cari_retur")
 
-        if not df_po_all.empty:
-            df_po_all["tgl_po"] = pd.to_datetime(df_po_all["tgl_po"], errors="coerce")
-            df_po_all["bulan_tahun"] = df_po_all["tgl_po"].dt.strftime("%Y-%m")
+df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
 
-            f_col1, f_col2 = st.columns(2)
-            with f_col1:
-                pilihan_bulan = st.selectbox(
-                    "Pilih Periode Bulan:",
-                    ["SEMUA PERIODE"] + sorted(df_po_all["bulan_tahun"].dropna().unique().tolist(), reverse=True),
-                    key="filter_po_bulan"
-                )
-            with f_col2:
-                pilihan_sup = st.selectbox(
-                    "Filter Supplier:",
-                    ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER,
-                    key="filter_po_sup"
-                )
+st.markdown("### 📋 Daftar Barang Retur")
 
-            df_filtered = df_po_all.copy()
-            if pilihan_bulan != "SEMUA PERIODE":
-                df_filtered = df_filtered[df_filtered["bulan_tahun"] == pilihan_bulan]
-            if pilihan_sup != "SEMUA SUPPLIER":
-                df_filtered = df_filtered[df_filtered["supplier"] == pilihan_sup]
+if not df_retur.empty:
+    # Tombol Pilih Semua / Batal Semua
+    col_b1, col_b2 = st.columns([1, 6])
+    with col_b1:
+        if st.button("☑️ Pilih Semua"):
+            st.session_state.selected_rows = df_retur["id"].tolist()
+            st.rerun()
+    with col_b2:
+        if st.button("❌ Batal Semua"):
+            st.session_state.selected_rows = []
+            st.rerun()
 
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Total Item PO Dibelanjakan", int(df_filtered["qty"].sum()))
-            m2.metric("Total Nominal PO", f"Rp {df_filtered['subtotal'].sum():,.0f}")
-            m3.metric("Frekuensi PO Ditransaksikan", df_filtered["no_po"].nunique())
+    if "selected_rows" not in st.session_state:
+        st.session_state.selected_rows = []
 
-            st.divider()
+    # Editor Data / Tabel interaktif dengan checkbox pilih baris
+    edited_df = st.data_editor(
+        df_retur,
+        column_config={
+            "id": st.column_config.NumberColumn("ID", disabled=True),
+            "kode": st.column_config.TextColumn("Kode"),
+            "nama": st.column_config.TextColumn("Nama Barang"),
+            "qty": st.column_config.NumberColumn("Qty"),
+            "hpp": st.column_config.NumberColumn("HPP", format="Rp %'d"),
+            "total": st.column_config.NumberColumn("Total", format="Rp %'d"),
+            "ket": st.column_config.TextColumn("Ket."),
+            "ed": st.column_config.TextColumn("ED"),
+            "supplier": st.column_config.TextColumn("Supplier"),
+            "status": st.column_config.SelectboxColumn("Status", options=DAFTAR_STATUS, required=True),
+            "tgl_input": st.column_config.TextColumn("Tgl Input", disabled=True),
+        },
+        disabled=["id", "tgl_input"],
+        hide_index=True,
+        use_container_width=True,
+        key="editor_tabel_retur"
+    )
 
-            col_g1, col_g2 = st.columns(2)
-
-            with col_g1:
-                st.markdown("### 🔥 Top 10 Produk Paling Sering / Banyak Dibeli (Qty)")
-                top_qty = df_filtered.groupby("nama_barang")["qty"].sum().reset_index().sort_values(by="qty", ascending=False).head(10)
-                st.bar_chart(top_qty.set_index("nama_barang"))
-
-            with col_g2:
-                st.markdown("### 💰 Top 10 Produk Nominal PO Terbesar (Rp)")
-                top_subtotal = df_filtered.groupby("nama_barang")["subtotal"].sum().reset_index().sort_values(by="subtotal", ascending=False).head(10)
-                st.bar_chart(top_subtotal.set_index("nama_barang"))
-
-            st.divider()
-            st.markdown("### 📅 Trend Pembelian PO per Bulan")
-            df_trend = df_po_all.groupby("bulan_tahun")["subtotal"].sum().reset_index()
-            st.line_chart(df_trend.set_index("bulan_tahun"))
-
-            st.divider()
-            st.markdown("### 📜 Detail Riwayat Pembelian PO")
-            st.dataframe(
-                df_filtered,
-                column_config={
-                    "hpp": st.column_config.NumberColumn("HPP", format="Rp %'d"),
-                    "harga_order": st.column_config.NumberColumn("Harga Order", format="Rp %'d"),
-                    "subtotal": st.column_config.NumberColumn("Subtotal", format="Rp %'d"),
-                },
-                hide_index=True,
-                use_container_width=True
-            )
-        else:
-            st.info("Belum ada data PO yang disimpan. Silakan paste nota PO Anda di tab 'Paste & Input PO Baru'.")
-
-
-# ==========================================
-# HALAMAN 2: RETUR BARANG
-# ==========================================
-elif menu == "📦 Retur Barang":
-    st.title("📦 Manajemen Retur Barang")
-
-    df_semua = ambil_data_retur()
-
-    if not df_semua.empty:
-        st.subheader("📊 Analisis & Grafik Retur Overall")
-        g_col1, g_col2 = st.columns(2)
-
-        with g_col1:
-            st.markdown("### 🔝 Top Supplier Nominal Retur Terbesar")
-            top_sup_retur = df_semua.groupby("supplier")["total"].sum().reset_index().sort_values(by="total", ascending=False).head(7)
-            st.bar_chart(top_sup_retur.set_index("supplier"))
-
-        with g_col2:
-            st.markdown("### 📈 Status Distribusi Retur")
-            status_dist = df_semua.groupby("status")["id"].count().reset_index().rename(columns={"id": "jumlah"})
-            st.bar_chart(status_dist.set_index("status"))
+    grand_total = df_retur["total"].sum()
+    st.markdown(f"#### **Grand Total: Rp {grand_total:,.0f}**")
 
     st.divider()
 
-    col_f1, col_f2, col_f3 = st.columns(3)
-    with col_f1:
-        f_sup = st.selectbox("Filter Supplier Retur:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER)
-    with col_f2:
-        f_stat = st.selectbox("Filter Status Retur:", ["SEMUA STATUS"] + DAFTAR_STATUS)
-    with col_f3:
-        f_cari = st.text_input("Cari Kode / Nama / Ket Retur:")
+    # Bagian 4: Ubah Status Pengajuan (Pilih Massal / Satu-satu)
+    st.markdown("### ⚡ Ubah Status Pengajuan (Pilih Massal / Satu-satu)")
+    
+    # Ambil baris yang dipilih dari data editor jika ada kolom centang, atau kita gunakan input manual ID / multiselect ID
+    list_all_ids = df_retur["id"].tolist()
+    selected_ids = st.multiselect("Pilih ID Barang Retur yang Akan Diubah Statusnya:", options=list_all_ids, default=st.session_state.get("selected_rows", []))
+    
+    st.markdown(f"Jumlah barang di-select/terpilih: **{len(selected_ids)}** barang")
 
-    df_retur = ambil_data_retur(f_sup, f_stat, f_cari)
+    col_s1, col_s2 = st.columns([2, 1])
+    with col_s1:
+        status_baru_massal = st.selectbox("Pilih Status Baru:", DAFTAR_STATUS, key="status_massal_input")
+    with col_s2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        btn_ubah_status = st.button("Ubah Status Barang Terpilih", type="primary", use_container_width=True)
 
-    st.subheader("📋 Daftar Barang Retur")
-    st.dataframe(df_retur, use_container_width=True, hide_index=True)
+    if btn_ubah_status:
+        if not selected_ids:
+            st.warning("Silakan pilih minimal satu barang terlebih dahulu!")
+        else:
+            if status_baru_massal == "Sukses":
+                dialog_konfirmasi_setujui(selected_ids, status_baru_massal)
+            else:
+                for item_id in selected_ids:
+                    supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", item_id).execute()
+                st.success(f"Berhasil memperbarui {len(selected_ids)} barang menjadi status '{status_baru_massal}'!")
+                st.rerun()
+
+    st.divider()
+
+    # Tombol aksi tambahan baris bawah (Update Detail & Hapus Data)
+    col_act1, col_act2 = st.columns(2)
+    with col_act1:
+        if st.button("💾 Update Detail Edit Manual", use_container_width=True):
+            for _, row in edited_df.iterrows():
+                new_total = row["qty"] * row["hpp"] if row["status"] != "Sukses" else 0
+                new_qty = row["qty"] if row["status"] != "Sukses" else 0
+                supabase.table("barang_retur").update({
+                    "kode": str(row["kode"]),
+                    "nama": str(row["nama"]),
+                    "qty": int(new_qty),
+                    "hpp": float(row["hpp"]),
+                    "total": float(new_total),
+                    "ket": str(row["ket"]),
+                    "ed": str(row["ed"]),
+                    "supplier": str(row["supplier"]),
+                    "status": str(row["status"])
+                }).eq("id", int(row["id"])).execute()
+            st.success("Perubahan data berhasil disimpan ke database!")
+            st.rerun()
+
+    with col_act2:
+        if st.button("🗑️ Hapus Data Retur Terpilih", use_container_width=True, type="secondary"):
+            if not selected_ids:
+                st.warning("Pilih data yang ingin dihapus terlebih dahulu.")
+            else:
+                for item_id in selected_ids:
+                    supabase.table("barang_retur").delete().eq("id", item_id).execute()
+                st.success("Data berhasil dihapus!")
+                st.rerun()
+
+else:
+    st.info("Tidak ada data barang retur yang ditemukan sesuai filter.")
+
+st.divider()
+
+# Bagian 5: Cetak Nota Retur (PDF)
+st.markdown("### 🖨️ Cetak Nota Retur (PDF)")
+col_pdf1, col_pdf2 = st.columns([3, 1])
+with col_pdf1:
+    pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
+
+with col_pdf2:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if pdf_supplier_target != "SEMUA SUPPLIER":
+        df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target)
+    else:
+        df_pdf_data = df_semua
+
+    if not df_pdf_data.empty:
+        pdf_bytes = generate_pdf_retur(df_pdf_data, pdf_supplier_target)
+        st.download_button(
+            label="📄 Download PDF Nota Retur",
+            data=pdf_bytes,
+            file_name=f"Nota_Retur_{pdf_supplier_target.replace(' ', '_')}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+    else:
+        st.button("📄 Download PDF Kosong", disabled=True, use_container_width=True)

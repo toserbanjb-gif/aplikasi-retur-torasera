@@ -126,36 +126,32 @@ DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
-    try:
-        query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
-        if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
-            query = query.eq("supplier", filter_supplier)
-        if filter_status and filter_status != "SEMUA STATUS":
-            query = query.eq("status", filter_status)
-        
-        response = query.execute()
+    query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
+    if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
+        query = query.eq("supplier", filter_supplier)
+    if filter_status and filter_status != "SEMUA STATUS":
+        query = query.eq("status", filter_status)
+    
+    response = query.execute()
 
-        if not response.data:
-            return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
-
-        df = pd.DataFrame(response.data)
-
-        if cari:
-            kw = cari.lower()
-            df = df[
-                df["kode"].astype(str).str.lower().str.contains(kw) |
-                df["nama"].astype(str).str.lower().str.contains(kw) |
-                df["ket"].astype(str).str.lower().str.contains(kw) |
-                df["supplier"].astype(str).str.lower().str.contains(kw) |
-                df["status"].astype(str).str.lower().str.contains(kw)
-            ]
-        return df
-    except Exception:
+    if not response.data:
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
+
+    df = pd.DataFrame(response.data)
+
+    if cari:
+        kw = cari.lower()
+        df = df[
+            df["kode"].astype(str).str.lower().str.contains(kw) |
+            df["nama"].astype(str).str.lower().str.contains(kw) |
+            df["ket"].astype(str).str.lower().str.contains(kw) |
+            df["supplier"].astype(str).str.lower().str.contains(kw) |
+            df["status"].astype(str).str.lower().str.contains(kw)
+        ]
+    return df
 
 
 def parse_pasted_retur_data(pasted_text):
-    """Merapikan & memproses string hasil copy-paste tabel aplikasi dengan aman tanpa membawa kolom ID."""
     lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
     if not lines:
         return pd.DataFrame()
@@ -418,21 +414,13 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
 
     with tab_form_paste:
         st.subheader("📋 Input Retur Massal via Copy-Paste")
-        st.markdown("Anda bisa langsung *copy* baris data langsung dari tabel aplikasi di bawah, lalu *paste* ke sini:")
-        
-        paste_sup_default = st.selectbox("Pilih Supplier Default (jika dari hasil copy tabel tidak membawa nama supplier)", DAFTAR_SUPPLIER, key="paste_sup_target")
-        raw_paste_text = st.text_area(
-            "Paste Baris Tabel Retur di Sini:",
-            height=150,
-            placeholder="Contoh langsung paste dari tabel:\n14\t6922360002156\tginbis dream animals...\t1\t16539\t16539\tEd\t29-07-26\tPT WIRA SADANA..."
-        )
+        paste_sup_default = st.selectbox("Pilih Supplier Default", DAFTAR_SUPPLIER, key="paste_sup_target")
+        raw_paste_text = st.text_area("Paste Baris Tabel Retur di Sini:", height=150)
 
         if raw_paste_text:
             df_parsed_retur = parse_pasted_retur_data(raw_paste_text)
             if not df_parsed_retur.empty:
-                st.markdown("**Preview Hasil Ekstraksi Otomatis:**")
                 st.dataframe(df_parsed_retur, use_container_width=True)
-
                 if st.button("💾 Simpan Semua Data Paste ke Database Retur", type="primary"):
                     records_to_insert = []
                     for _, r in df_parsed_retur.iterrows():
@@ -452,72 +440,36 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                             "tgl_input": str(datetime.date.today())
                         })
                     supabase.table("barang_retur").insert(records_to_insert).execute()
-                    st.success(f"Berhasil menyimpan {len(records_to_insert)} item barang retur ke database!")
+                    st.success(f"Berhasil menyimpan {len(records_to_insert)} item barang retur!")
                     st.rerun()
-            else:
-                st.warning("Format teks belum terbaca dengan benar. Pastikan menyalin baris data secara lengkap dari tabel.")
 
     with tab_form_csv:
         st.subheader("📁 Upload File CSV Retur Barang")
-        st.markdown("Unggah file berformat CSV yang berisi data retur. Pastikan kolom minimal mencakup: `kode`, `nama`, `qty`, `hpp` (atau sesuaikan dengan mapping di bawah jika diperlukan).")
-        
-        csv_sup_default = st.selectbox("Pilih Supplier Default untuk File CSV ini", DAFTAR_SUPPLIER, key="csv_sup_target")
+        csv_sup_default = st.selectbox("Pilih Supplier Default untuk File CSV", DAFTAR_SUPPLIER, key="csv_sup_target")
         uploaded_csv = st.file_uploader("Pilih file CSV", type=["csv"])
 
         if uploaded_csv is not None:
-            try:
-                df_csv = pd.read_csv(uploaded_csv)
-                st.markdown("**Preview Data dari CSV:**")
-                st.dataframe(df_csv.head(5), use_container_width=True)
-
-                if st.button("💾 Proses & Simpan Data CSV ke Database", type="primary"):
-                    records_to_insert = []
-                    df_csv.columns = [str(c).strip().lower() for c in df_csv.columns]
-                    
-                    for _, row in df_csv.iterrows():
-                        kode = str(row.get("kode", row.get("barcode", "-")))
-                        nama = str(row.get("nama", row.get("nama barang", row.get("barang", "Barang Retur"))))
-                        
-                        try:
-                            qty = int(float(str(row.get("qty", row.get("jumlah", 1))).replace(",", ".")))
-                        except:
-                            qty = 1
-
-                        try:
-                            hpp = float(str(row.get("hpp", row.get("harga", 0))).replace(",", "").replace(".", ""))
-                        except:
-                            hpp = 0.0
-
-                        ket = str(row.get("ket", row.get("keterangan", "Rusak")))
-                        ed = str(row.get("ed", row.get("expired", "-")))
-                        
-                        sup_from_csv = row.get("supplier", None)
-                        final_supp = sup_from_csv if sup_from_csv and str(sup_from_csv) in DAFTAR_SUPPLIER else csv_sup_default
-                        
-                        stat_from_csv = row.get("status", "Pengajuan")
-                        final_stat = stat_from_csv if str(stat_from_csv) in DAFTAR_STATUS else "Pengajuan"
-
-                        subtotal = qty * hpp if final_stat != "Sukses" else 0
-                        final_qty = qty if final_stat != "Sukses" else 0
-
-                        records_to_insert.append({
-                            "supplier": final_supp,
-                            "kode": kode,
-                            "nama": nama,
-                            "qty": final_qty,
-                            "hpp": hpp,
-                            "total": subtotal,
-                            "ket": ket,
-                            "ed": ed,
-                            "status": final_stat,
-                            "tgl_input": str(datetime.date.today())
-                        })
-
-                    supabase.table("barang_retur").insert(records_to_insert).execute()
-                    st.success(f"Berhasil mengimpor dan menyimpan {len(records_to_insert)} data dari file CSV!")
-                    st.rerun()
-            except Exception as e:
-                st.error(f"Gagal membaca file CSV. Pastikan format file benar. Detail error: {e}")
+            df_csv = pd.read_csv(uploaded_csv)
+            st.dataframe(df_csv.head(5), use_container_width=True)
+            if st.button("💾 Proses & Simpan Data CSV ke Database", type="primary"):
+                records_to_insert = []
+                df_csv.columns = [str(c).strip().lower() for c in df_csv.columns]
+                for _, row in df_csv.iterrows():
+                    records_to_insert.append({
+                        "supplier": csv_sup_default,
+                        "kode": str(row.get("kode", "-")),
+                        "nama": str(row.get("nama", "Barang")),
+                        "qty": int(row.get("qty", 1)),
+                        "hpp": float(row.get("hpp", 0)),
+                        "total": int(row.get("qty", 1)) * float(row.get("hpp", 0)),
+                        "ket": str(row.get("ket", "Rusak")),
+                        "ed": str(row.get("ed", "-")),
+                        "status": "Pengajuan",
+                        "tgl_input": str(datetime.date.today())
+                    })
+                supabase.table("barang_retur").insert(records_to_insert).execute()
+                st.success("Berhasil mengimpor CSV!")
+                st.rerun()
 
 st.divider()
 
@@ -535,16 +487,6 @@ df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
 st.markdown("### 📋 Daftar Barang Retur")
 
 if not df_retur.empty:
-    col_b1, col_b2 = st.columns([1, 6])
-    with col_b1:
-        if st.button("☑️ Pilih Semua"):
-            st.session_state.selected_rows = df_retur["id"].tolist()
-            st.rerun()
-    with col_b2:
-        if st.button("❌ Batal Semua"):
-            st.session_state.selected_rows = []
-            st.rerun()
-
     if "selected_rows" not in st.session_state:
         st.session_state.selected_rows = []
 
@@ -574,14 +516,10 @@ if not df_retur.empty:
 
     st.divider()
 
-    # Bagian 4: Ubah Status Pengajuan (Pilih Massal / Satu-satu)
     st.markdown("### ⚡ Ubah Status Pengajuan (Pilih Massal / Satu-satu)")
-    
     list_all_ids = df_retur["id"].tolist()
     selected_ids = st.multiselect("Pilih ID Barang Retur yang Akan Diubah Statusnya:", options=list_all_ids, default=st.session_state.get("selected_rows", []))
     
-    st.markdown(f"Jumlah barang di-select/terpilih: **{len(selected_ids)}** barang")
-
     col_s1, col_s2 = st.columns([2, 1])
     with col_s1:
         status_baru_massal = st.selectbox("Pilih Status Baru:", DAFTAR_STATUS, key="status_massal_input")
@@ -598,7 +536,7 @@ if not df_retur.empty:
             else:
                 for item_id in selected_ids:
                     supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", item_id).execute()
-                st.success(f"Berhasil memperbarui {len(selected_ids)} barang menjadi status '{status_baru_massal}'!")
+                st.success(f"Berhasil memperbarui status menjadi '{status_baru_massal}'!")
                 st.rerun()
 
     st.divider()
@@ -620,7 +558,7 @@ if not df_retur.empty:
                     "supplier": str(row["supplier"]),
                     "status": str(row["status"])
                 }).eq("id", int(row["id"])).execute()
-            st.success("Perubahan data berhasil disimpan ke database!")
+            st.success("Perubahan data berhasil disimpan!")
             st.rerun()
 
     with col_act2:
@@ -632,9 +570,8 @@ if not df_retur.empty:
                     supabase.table("barang_retur").delete().eq("id", item_id).execute()
                 st.success("Data berhasil dihapus!")
                 st.rerun()
-
 else:
-    st.info("Tidak ada data barang retur yang ditemukan sesuai filter.")
+    st.info("Tidak ada data barang retur yang ditemukan di database atau sesuai filter. Silakan tambah data baru melalui menu di atas.")
 
 st.divider()
 
@@ -646,10 +583,7 @@ with col_pdf1:
 
 with col_pdf2:
     st.markdown("<br>", unsafe_allow_html=True)
-    if pdf_supplier_target != "SEMUA SUPPLIER":
-        df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target)
-    else:
-        df_pdf_data = df_semua
+    df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target) if pdf_supplier_target != "SEMUA SUPPLIER" else df_semua
 
     if not df_pdf_data.empty:
         pdf_bytes = generate_pdf_retur(df_pdf_data, pdf_supplier_target)

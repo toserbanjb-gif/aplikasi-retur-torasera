@@ -172,74 +172,86 @@ def parse_pasted_po_data(pasted_text):
 
 # --- FUNGSI INTERAKSI SUPABASE ---
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
-    query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
-    if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
-        query = query.eq("supplier", filter_supplier)
-    if filter_status and filter_status != "SEMUA STATUS":
-        query = query.eq("status", filter_status)
-    
-    response = query.execute()
-    df = pd.DataFrame(response.data)
+    try:
+        query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
+        if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
+            query = query.eq("supplier", filter_supplier)
+        if filter_status and filter_status != "SEMUA STATUS":
+            query = query.eq("status", filter_status)
+        
+        response = query.execute()
 
-    if df.empty:
+        if not response.data:
+            return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
+
+        df = pd.DataFrame(response.data)
+
+        if cari:
+            kw = cari.lower()
+            df = df[
+                df["kode"].astype(str).str.lower().str.contains(kw) |
+                df["nama"].astype(str).str.lower().str.contains(kw) |
+                df["ket"].astype(str).str.lower().str.contains(kw) |
+                df["supplier"].astype(str).str.lower().str.contains(kw) |
+                df["status"].astype(str).str.lower().str.contains(kw)
+            ]
+        return df
+    except Exception as e:
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
-
-    if cari:
-        kw = cari.lower()
-        df = df[
-            df["kode"].astype(str).str.lower().str.contains(kw) |
-            df["nama"].astype(str).str.lower().str.contains(kw) |
-            df["ket"].astype(str).str.lower().str.contains(kw) |
-            df["supplier"].astype(str).str.lower().str.contains(kw) |
-            df["status"].astype(str).str.lower().str.contains(kw)
-        ]
-    return df
 
 
 def ambil_data_diskontinu(filter_supplier="SEMUA SUPPLIER", cari=""):
-    query = supabase.table("barang_diskontinu").select("id, kode, nama, kategori, supplier, alasan, tgl_diskontinu")
-    if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
-        query = query.eq("supplier", filter_supplier)
-    
-    response = query.execute()
-    df = pd.DataFrame(response.data)
+    try:
+        query = supabase.table("barang_diskontinu").select("id, kode, nama, kategori, supplier, alasan, tgl_diskontinu")
+        if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
+            query = query.eq("supplier", filter_supplier)
+        
+        response = query.execute()
 
-    if df.empty:
+        if not response.data:
+            return pd.DataFrame(columns=["id", "kode", "nama", "kategori", "supplier", "alasan", "tgl_diskontinu"])
+
+        df = pd.DataFrame(response.data)
+
+        if cari:
+            kw = cari.lower()
+            df = df[
+                df["kode"].astype(str).str.lower().str.contains(kw) |
+                df["nama"].astype(str).str.lower().str.contains(kw) |
+                df["kategori"].astype(str).str.lower().str.contains(kw) |
+                df["supplier"].astype(str).str.lower().str.contains(kw) |
+                df["alasan"].astype(str).str.lower().str.contains(kw)
+            ]
+        return df
+    except Exception as e:
         return pd.DataFrame(columns=["id", "kode", "nama", "kategori", "supplier", "alasan", "tgl_diskontinu"])
-
-    if cari:
-        kw = cari.lower()
-        df = df[
-            df["kode"].astype(str).str.lower().str.contains(kw) |
-            df["nama"].astype(str).str.lower().str.contains(kw) |
-            df["kategori"].astype(str).str.lower().str.contains(kw) |
-            df["supplier"].astype(str).str.lower().str.contains(kw) |
-            df["alasan"].astype(str).str.lower().str.contains(kw)
-        ]
-    return df
 
 
 def ambil_data_pesanan(filter_status="SEMUA STATUS", cari=""):
-    query = supabase.table("pesanan_customer").select("id, nama_customer, no_hp, kode_barang, nama_barang, qty, harga, total, tgl_pesan, status, catatan")
-    if filter_status and filter_status != "SEMUA STATUS":
-        query = query.eq("status", filter_status)
-        
-    response = query.execute()
-    df = pd.DataFrame(response.data)
+    try:
+        query = supabase.table("pesanan_customer").select("id, nama_customer, no_hp, kode_barang, nama_barang, qty, harga, total, tgl_pesan, status, catatan")
+        if filter_status and filter_status != "SEMUA STATUS":
+            query = query.eq("status", filter_status)
+            
+        response = query.execute()
 
-    if df.empty:
+        if not response.data:
+            return pd.DataFrame(columns=["id", "nama_customer", "no_hp", "kode_barang", "nama_barang", "qty", "harga", "total", "tgl_pesan", "status", "catatan"])
+
+        df = pd.DataFrame(response.data)
+
+        if cari:
+            kw = cari.lower()
+            df = df[
+                df["nama_customer"].astype(str).str.lower().str.contains(kw) |
+                df["no_hp"].astype(str).str.lower().str.contains(kw) |
+                df["kode_barang"].astype(str).str.lower().str.contains(kw) |
+                df["nama_barang"].astype(str).str.lower().str.contains(kw) |
+                df["status"].astype(str).str.lower().str.contains(kw)
+            ]
+        return df
+    except Exception as e:
         return pd.DataFrame(columns=["id", "nama_customer", "no_hp", "kode_barang", "nama_barang", "qty", "harga", "total", "tgl_pesan", "status", "catatan"])
-
-    if cari:
-        kw = cari.lower()
-        df = df[
-            df["nama_customer"].astype(str).str.lower().str.contains(kw) |
-            df["no_hp"].astype(str).str.lower().str.contains(kw) |
-            df["kode_barang"].astype(str).str.lower().str.contains(kw) |
-            df["nama_barang"].astype(str).str.lower().str.contains(kw) |
-            df["status"].astype(str).str.lower().str.contains(kw)
-        ]
-    return df
 
 
 # --- FUNGSI GENERATE PDF ---
@@ -646,7 +658,7 @@ if menu == "📈 Analisis PO & Produk Terlaris":
         raw_paste = st.text_area(
             "📋 Paste Tabel Nota PO di sini (Blok tabel dari PDF/Excel lalu CTRL+V):",
             height=200,
-            placeholder="Contoh format:\n1  sudah  8991038766100  8991038766100  -  CINDERELIA CT BUDS 100s  3.544  2030-12-11  3.258  0  24  24  78.192..."
+            placeholder="Contoh format:\n1   sudah   8991038766100   8991038766100   -   CINDERELIA CT BUDS 100s   3.544   2030-12-11   3.258   0   24   24   78.192..."
         )
 
         if raw_paste:
@@ -699,14 +711,12 @@ if menu == "📈 Analisis PO & Produk Terlaris":
                     key="filter_po_sup"
                 )
 
-            # Filtering
             df_filtered = df_po_all.copy()
             if pilihan_bulan != "SEMUA PERIODE":
                 df_filtered = df_filtered[df_filtered["bulan_tahun"] == pilihan_bulan]
             if pilihan_sup != "SEMUA SUPPLIER":
                 df_filtered = df_filtered[df_filtered["supplier"] == pilihan_sup]
 
-            # Metric Cards
             m1, m2, m3 = st.columns(3)
             m1.metric("Total Item PO Dibelanjakan", int(df_filtered["qty"].sum()))
             m2.metric("Total Nominal PO", f"Rp {df_filtered['subtotal'].sum():,.0f}")
@@ -751,7 +761,7 @@ if menu == "📈 Analisis PO & Produk Terlaris":
 # HALAMAN 2: RETUR BARANG
 # ==========================================
 elif menu == "📦 Retur Barang":
-    st.title("MASIH DALAM PERBAIKAN ")
+    st.title("📦 Manajemen Retur Barang")
 
     df_semua = ambil_data_retur()
 
@@ -783,183 +793,3 @@ elif menu == "📦 Retur Barang":
 
     st.subheader("📋 Daftar Barang Retur")
     st.dataframe(df_retur, use_container_width=True, hide_index=True)
-
-    with st.expander("➕ Tambah Data Retur Baru"):
-        with st.form("form_tambah_retur"):
-            in_kode = st.text_input("Kode Barang")
-            in_nama = st.text_input("Nama Barang")
-            in_qty = st.number_input("Qty Retur", min_value=1, value=1)
-            in_hpp = st.number_input("HPP / Harga Satuan", min_value=0.0, value=0.0)
-            in_ket = st.text_input("Keterangan Retur", value="Rusak / ED")
-            in_ed = st.text_input("Expired Date (ED)", value="-")
-            in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
-
-            if st.form_submit_button("Simpan Data Retur"):
-                total_val = in_qty * in_hpp
-                tgl_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                supabase.table("barang_retur").insert({
-                    "kode": in_kode,
-                    "nama": in_nama,
-                    "qty": in_qty,
-                    "hpp": in_hpp,
-                    "total": total_val,
-                    "ket": in_ket,
-                    "ed": in_ed,
-                    "supplier": in_sup,
-                    "status": "Pengajuan",
-                    "tgl_input": tgl_str
-                }).execute()
-                st.success("Barang retur berhasil ditambahkan!")
-                st.rerun()
-
-    if not df_retur.empty:
-        st.subheader("🖨️ Cetak Nota Retur")
-        sup_cetak = st.selectbox("Pilih Supplier untuk dicetak Nota:", df_retur["supplier"].unique())
-        df_cetak = df_retur[df_retur["supplier"] == sup_cetak]
-        pdf_bytes = generate_pdf(df_cetak, sup_cetak)
-        st.download_button(
-            f"📄 Download Nota Retur ({sup_cetak})",
-            data=pdf_bytes,
-            file_name=f"Nota_Retur_{sup_cetak}.pdf",
-            mime="application/pdf"
-        )
-
-
-# ==========================================
-# HALAMAN 3: REKAP RETUR BULANAN & ED
-# ==========================================
-elif menu == "📊 Rekap Retur Bulanan & ED":
-    st.title("📊 Rekap Retur Bulanan & Analisis ED")
-
-    df_retur_all = ambil_data_retur()
-    if not df_retur_all.empty:
-        df_retur_all["tgl_input"] = pd.to_datetime(df_retur_all["tgl_input"], errors="coerce")
-        df_retur_all["bulan_tahun"] = df_retur_all["tgl_input"].dt.strftime("%Y-%m")
-
-        pilihan_bulan = st.selectbox(
-            "Pilih Periode Bulan:",
-            sorted(df_retur_all["bulan_tahun"].dropna().unique().tolist(), reverse=True)
-        )
-
-        df_bulan = df_retur_all[df_retur_all["bulan_tahun"] == pilihan_bulan]
-
-        # Filter khusus retur ED
-        df_ed = df_bulan[df_bulan["ket"].str.contains("ED|expired|kadaluarsa", case=False, na=False)]
-
-        rekap_ed = df_ed.groupby(["kode", "nama", "supplier"]).agg(
-            frekuensi_ed=("id", "count"),
-            total_qty_ed=("qty", "sum")
-        ).reset_index()
-
-        rekap_ed["rekomendasi_dis"] = rekap_ed["frekuensi_ed"] >= 2
-
-        st.subheader(f"📌 Rekap Produk Retur ED - Periode {pilihan_bulan}")
-        st.dataframe(rekap_ed, use_container_width=True)
-
-        pdf_rekap = generate_pdf_rekap_ed(rekap_ed, pilihan_bulan)
-        st.download_button(
-            "📄 Download Laporan Rekap ED (PDF)",
-            data=pdf_rekap,
-            file_name=f"Rekap_ED_{pilihan_bulan}.pdf",
-            mime="application/pdf"
-        )
-    else:
-        st.info("Belum ada data retur yang tersimpan.")
-
-
-# ==========================================
-# HALAMAN 4: BARANG DISKONTINU
-# ==========================================
-elif menu == "🚫 Barang Diskontinu":
-    st.title("🚫 Manajemen Barang Diskontinu")
-
-    f_sup_dis = st.selectbox("Filter Supplier Diskontinu:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER)
-    f_cari_dis = st.text_input("Cari Barang Diskontinu:")
-
-    df_dis = ambil_data_diskontinu(f_sup_dis, f_cari_dis)
-    st.dataframe(df_dis, use_container_width=True, hide_index=True)
-
-    with st.expander("➕ Tambah Barang Diskontinu Baru"):
-        with st.form("form_tambah_diskontinu"):
-            dis_kode = st.text_input("Kode Barang")
-            dis_nama = st.text_input("Nama Barang")
-            dis_kat = st.text_input("Kategori Barang", value="General")
-            dis_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
-            dis_alasan = st.text_input("Alasan Diskontinu", value="Kurang Laku / ED Berulang")
-
-            if st.form_submit_button("Simpan Barang Diskontinu"):
-                tgl_dis = datetime.date.today().strftime("%Y-%m-%d")
-                supabase.table("barang_diskontinu").insert({
-                    "kode": dis_kode,
-                    "nama": dis_nama,
-                    "kategori": dis_kat,
-                    "supplier": dis_sup,
-                    "alasan": dis_alasan,
-                    "tgl_diskontinu": tgl_dis
-                }).execute()
-                st.success("Barang diskontinu berhasil disimpan!")
-                st.rerun()
-
-    if not df_dis.empty:
-        st.subheader("🖨️ Cetak Surat Pemberitahuan Diskontinu")
-        sup_dis_cetak = st.selectbox("Pilih Supplier Diskontinu:", df_dis["supplier"].unique())
-        df_dis_cetak = df_dis[df_dis["supplier"] == sup_dis_cetak]
-        pdf_dis_bytes = generate_pdf_diskontinu(df_dis_cetak, sup_dis_cetak)
-        st.download_button(
-            f"📄 Download Surat Diskontinu ({sup_dis_cetak})",
-            data=pdf_dis_bytes,
-            file_name=f"Surat_Diskontinu_{sup_dis_cetak}.pdf",
-            mime="application/pdf"
-        )
-
-
-# ==========================================
-# HALAMAN 5: PESANAN CUSTOMER
-# ==========================================
-elif menu == "🛒 Pesanan Customer":
-    st.title("🛒 Management Pesanan Customer / Pre-Order")
-
-    f_stat_pes = st.selectbox("Filter Status Pesanan:", ["SEMUA STATUS"] + DAFTAR_STATUS_PESANAN)
-    f_cari_pes = st.text_input("Cari Nama Customer / Barang / No HP:")
-
-    df_pesan = ambil_data_pesanan(f_stat_pes, f_cari_pes)
-    st.dataframe(df_pesan, use_container_width=True, hide_index=True)
-
-    with st.expander("➕ Tambah Pesanan Customer Baru"):
-        with st.form("form_tambah_pesanan"):
-            pes_nama_cust = st.text_input("Nama Customer")
-            pes_hp = st.text_input("No HP / WhatsApp")
-            pes_kode = st.text_input("Kode Barang")
-            pes_nama_brg = st.text_input("Nama Barang")
-            pes_qty = st.number_input("Qty Pesanan", min_value=1, value=1)
-            pes_harga = st.number_input("Harga Satuan (Rp)", min_value=0.0, value=0.0)
-            pes_catatan = st.text_input("Catatan / Keterangan", value="-")
-
-            if st.form_submit_button("Simpan Pesanan"):
-                total_pesan = pes_qty * pes_harga
-                tgl_pesan = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
-                supabase.table("pesanan_customer").insert({
-                    "nama_customer": pes_nama_cust,
-                    "no_hp": pes_hp,
-                    "kode_barang": pes_kode,
-                    "nama_barang": pes_nama_brg,
-                    "qty": pes_qty,
-                    "harga": pes_harga,
-                    "total": total_pesan,
-                    "tgl_pesan": tgl_pesan,
-                    "status": "Pending",
-                    "catatan": pes_catatan
-                }).execute()
-                st.success("Pesanan customer berhasil ditambahkan!")
-                st.rerun()
-
-    if not df_pesan.empty:
-        st.subheader("🖨️ Cetak Nota Pesanan Customer")
-        pdf_pesan_bytes = generate_pdf_pesanan(df_pesan)
-        st.download_button(
-            "📄 Download Nota Pesanan (PDF)",
-            data=pdf_pesan_bytes,
-            file_name="Nota_Pesanan_Customer.pdf",
-            mime="application/pdf"
-        )
-

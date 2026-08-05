@@ -156,7 +156,7 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
 
 
 def parse_pasted_retur_data(pasted_text):
-    """Merapikan & memproses string hasil copy-paste tabel aplikasi (termasuk kolom ID/Checkbox) ke DataFrame."""
+    """Merapikan & memproses string hasil copy-paste tabel aplikasi dengan aman tanpa membawa kolom ID."""
     lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
     if not lines:
         return pd.DataFrame()
@@ -165,7 +165,6 @@ def parse_pasted_retur_data(pasted_text):
     for line in lines:
         cols = re.split(r"\t+|\s{2,}", line)
         if len(cols) >= 2:
-            # Skip baris header jika ikut tersalin
             if any(h in cols[0].lower() or (len(cols) > 1 and h in cols[1].lower()) for h in ["pilih", "id", "kode", "status", "barang"]):
                 continue
 
@@ -176,51 +175,43 @@ def parse_pasted_retur_data(pasted_text):
                 except:
                     return 0
 
-            # Deteksi apakah kolom pertama adalah Checkbox/ID (artinya disalin langsung dari tabel web app)
-            # Format tabel web: [Checkbox/Kosong, ID, Kode, Nama Barang, Qty, HPP, Total, Keterangan, ED, Supplier, Status, Tgl]
-            # Atau format manual ringkas: [Kode, Nama, Qty, HPP, Ket, ED]
-            
-            # Cek jika kolom kedua atau ketiga berupa angka ID (misal integer pendek atau angka murni)
-            shift = 0
-            if len(cols) > 2 and cols[0] in ["", "True", "False"] and cols[1].isdigit():
-                shift = 2  # Lewati kolom checkbox & ID
-            elif len(cols) > 1 and cols[0].isdigit() and len(cols[0]) <= 4:
-                shift = 1  # Lewati kolom ID saja
+            # Deteksi & buang elemen checkbox/ID di awal baris hasil copy tabel web
+            clean_cols = []
+            for c in cols:
+                # Lewati kolom yang berupa status centang (true/false) atau angka ID murni pendek di kolom awal
+                if c in ["True", "False", ""]:
+                    continue
+                clean_cols.append(c)
 
-            actual_cols = cols[shift:]
+            # Jika elemen pertama adalah angka ID (misal angka 14, 15, dst), buang elemen tersebut
+            if clean_cols and clean_cols[0].isdigit() and len(clean_cols[0]) <= 5 and not clean_cols[0].startswith("8"):
+                clean_cols.pop(0)
 
-            if len(actual_cols) < 2:
+            if len(clean_cols) < 2:
                 continue
 
-            kode = actual_cols[0] if len(actual_cols) > 0 else "-"
-            nama = actual_cols[1] if len(actual_cols) > 1 else "Barang Retur"
-            qty = int(clean_num(actual_cols[2])) if len(actual_cols) > 2 and clean_num(actual_cols[2]) > 0 else 1
-            hpp = clean_num(actual_cols[3]) if len(actual_cols) > 3 else 0
-            
-            # Kolom Total ada di index 4 jika format lengkap tabel, kita cek apakah kolom ke-4 adalah angka besar/hasil perkalian
-            # Urutan standar tabel: [Kode(0), Nama(1), Qty(2), HPP(3), Total(4), Ket(5), ED(6), Supplier(7), Status(8)]
-            # Urutan paste lengkap dari UI: Kode, Nama, Qty, HPP, Total, Ket, ED, Supplier, Status
+            kode = clean_cols[0] if len(clean_cols) > 0 else "-"
+            nama = clean_cols[1] if len(clean_cols) > 1 else "Barang Retur"
+            qty = int(clean_num(clean_cols[2])) if len(clean_cols) > 2 and clean_num(clean_cols[2]) > 0 else 1
+            hpp = clean_num(clean_cols[3]) if len(clean_cols) > 3 else 0
             
             ket = "Rusak"
             ed = "-"
             supp_parsed = None
             stat_parsed = "Pengajuan"
 
-            if len(actual_cols) > 5 and not actual_cols[4].replace('.', '', 1).isdigit():
-                # Jika kolom ke-4 bukan angka, berarti itu Keterangan (format lama/ringkas)
-                ket = actual_cols[4]
-                ed = actual_cols[5] if len(actual_cols) > 5 else "-"
+            if len(clean_cols) > 5 and not clean_cols[4].replace('.', '', 1).isdigit():
+                ket = clean_cols[4]
+                ed = clean_cols[5] if len(clean_cols) > 5 else "-"
             else:
-                # Format tabel lengkap dari UI aplikasi
-                # [0:Kode, 1:Nama, 2:Qty, 3:HPP, 4:Total, 5:Ket, 6:ED, 7:Supplier, 8:Status]
-                if len(actual_cols) > 5:
-                    ket = actual_cols[5]
-                if len(actual_cols) > 6:
-                    ed = actual_cols[6]
-                if len(actual_cols) > 7:
-                    supp_parsed = actual_cols[7]
-                if len(actual_cols) > 8:
-                    stat_parsed = actual_cols[8]
+                if len(clean_cols) > 5:
+                    ket = clean_cols[5]
+                if len(clean_cols) > 6:
+                    ed = clean_cols[6]
+                if len(clean_cols) > 7:
+                    supp_parsed = clean_cols[7]
+                if len(clean_cols) > 8:
+                    stat_parsed = clean_cols[8]
 
             subtotal = qty * hpp
 
@@ -449,7 +440,6 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=
                 if st.button("💾 Simpan Semua Data Paste ke Database Retur", type="primary"):
                     records_to_insert = []
                     for _, r in df_parsed_retur.iterrows():
-                        # Gunakan supplier dari hasil paste jika terbaca, jika tidak pakai pilihan default di atas
                         final_supp = r["Supplier"] if r["Supplier"] and r["Supplier"] in DAFTAR_SUPPLIER else paste_sup_default
                         final_stat = r["Status"] if r["Status"] in DAFTAR_STATUS else "Pengajuan"
                         

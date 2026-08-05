@@ -377,6 +377,71 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
             st.rerun()
 
 
+@st.dialog("✏️ Edit Data Barang Retur")
+def dialog_edit_barang(item_id):
+    # Ambil data spesifik berdasarkan ID
+    res = supabase.table("barang_retur").select("*").eq("id", int(item_id)).execute()
+    if not res.data:
+        st.error("Data tidak ditemukan!")
+        if st.button("Tutup"):
+            st.rerun()
+        return
+
+    data_item = res.data[0]
+    
+    # Cari index supplier saat ini
+    sup_val = data_item.get("supplier", "Belum Tau")
+    sup_idx = DAFTAR_SUPPLIER.index(sup_val) if sup_val in DAFTAR_SUPPLIER else 0
+
+    stat_val = data_item.get("status", "Pengajuan")
+    stat_idx = DAFTAR_STATUS.index(stat_val) if stat_val in DAFTAR_STATUS else 0
+
+    with st.form("form_edit_satuan"):
+        st.markdown(f"**Edit Data untuk ID: {item_id}**")
+        e_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER, index=sup_idx)
+        
+        c1, c2 = st.columns(2)
+        with c1:
+            e_kode = st.text_input("Kode / Barcode", value=str(data_item.get("kode", "-")))
+        with c2:
+            e_qty = st.number_input("Qty", min_value=0, value=int(data_item.get("qty", 1)))
+
+        c3, c4 = st.columns(2)
+        with c3:
+            e_nama = st.text_input("Nama Barang", value=str(data_item.get("nama", "")))
+        with c4:
+            e_hpp = st.number_input("HPP (Rp)", min_value=0.0, value=float(data_item.get("hpp", 0.0)), step=500.0)
+
+        c5, c6, c7 = st.columns(3)
+        with c5:
+            e_ket = st.text_input("Keterangan", value=str(data_item.get("ket", "Rusak")))
+        with c6:
+            e_ed = st.text_input("ED", value=str(data_item.get("ed", "-")))
+        with c7:
+            e_status = st.selectbox("Status", DAFTAR_STATUS, index=stat_idx)
+
+        submit_edit = st.form_submit_button("💾 Simpan Perubahan", type="primary")
+        if submit_edit:
+            is_sukses = (e_status == "Sukses")
+            final_qty = 0 if is_sukses else e_qty
+            total_val = 0 if is_sukses else (e_qty * e_hpp)
+
+            supabase.table("barang_retur").update({
+                "supplier": e_sup,
+                "kode": e_kode if e_kode else "-",
+                "nama": e_nama,
+                "qty": final_qty,
+                "hpp": e_hpp,
+                "total": total_val,
+                "ket": e_ket,
+                "ed": e_ed,
+                "status": e_status
+            }).eq("id", int(item_id)).execute()
+
+            st.success("Data berhasil diperbarui!")
+            st.rerun()
+
+
 # --- TAMPILAN UTAMA HALAMAN RETUR BARANG ---
 st.title("📦 Retur Barang - Torasera Nurja Berkah")
 
@@ -432,6 +497,7 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                     is_duplicate = cek_barang_duplikat(f_in_sup, f_in_kode, f_in_nama)
                     if is_duplicate:
                         st.warning("⚠️ Peringatan: Barang dengan Nama atau Kode tersebut sudah terdaftar di database untuk supplier ini!")
+                        st.stop()  # <-- Pengaman agar tidak lanjut insert dan error
                     
                     is_sukses = (f_in_status == "Sukses")
                     final_qty = 0 if is_sukses else f_in_qty
@@ -533,7 +599,6 @@ df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
 st.markdown("### 📋 Daftar Barang Retur")
 
 if not df_retur.empty:
-    # Tabel interaktif bersih tanpa checkbox kolom edit/hapus di dalam sel yang rentan salah klik
     edited_df = st.data_editor(
         df_retur,
         column_config={
@@ -560,23 +625,21 @@ if not df_retur.empty:
 
     st.divider()
 
-    # Tombol Aksi Simpan Perubahan Per Baris atau Massal yang Aman
+    # Tombol Aksi & Edit Terpisah
     st.markdown("### 🛠️ Pengelolaan Data Terpilih")
     
     list_all_ids = df_retur["id"].tolist()
-    selected_ids = st.multiselect("Pilih ID Barang Retur (untuk Aksi Ubah Status / Simpan / Hapus):", options=list_all_ids)
+    selected_ids = st.multiselect("Pilih ID Barang Retur (untuk Aksi Edit / Ubah Status / Hapus):", options=list_all_ids)
 
-    act_col1, act_col2, act_col3 = st.columns(3)
+    act_col1, act_col2, act_col3, act_col4 = st.columns(4)
 
     with act_col1:
-        if st.button("💾 Simpan Perubahan Tabel", type="primary", use_container_width=True):
-            # Bandingkan data yang di-edit dengan data awal
+        if st.button("💾 Simpan Tabel", type="primary", use_container_width=True):
             perubahan_tercatat = 0
             for idx, row in edited_df.iterrows():
                 original_row = df_retur.loc[df_retur["id"] == row["id"]]
                 if not original_row.empty:
                     orig = original_row.iloc[0]
-                    # Cek apakah ada perubahan nilai pada baris tersebut
                     if (
                         str(row["kode"]) != str(orig["kode"]) or
                         str(row["nama"]) != str(orig["nama"]) or
@@ -608,14 +671,20 @@ if not df_retur.empty:
                 st.success(f"Berhasil menyimpan perubahan untuk {perubahan_tercatat} baris data!")
                 st.rerun()
             else:
-                st.info("Tidak ada perubahan data yang terdeteksi untuk disimpan.")
+                st.info("Tidak ada perubahan data yang terdeteksi.")
 
     with act_col2:
-        status_baru_massal = st.selectbox("Status Baru (Massal):", DAFTAR_STATUS, key="status_massal_input", label_visibility="collapsed")
-        btn_ubah_status = st.button("🔄 Ubah Status ID Terpilih", use_container_width=True)
-        if btn_ubah_status:
+        if st.button("✏️ Edit Data Terpilih", use_container_width=True):
+            if not selected_ids or len(selected_ids) != 1:
+                st.warning("Silakan pilih tepat **1 ID** saja untuk diedit melalui form pop-up!")
+            else:
+                dialog_edit_barang(selected_ids[0])
+
+    with act_col3:
+        status_baru_massal = st.selectbox("Status:", DAFTAR_STATUS, key="status_massal_input", label_visibility="collapsed")
+        if st.button("🔄 Ubah Status", use_container_width=True):
             if not selected_ids:
-                st.warning("Silakan pilih minimal satu ID barang di atas terlebih dahulu!")
+                st.warning("Pilih minimal satu ID barang!")
             else:
                 if status_baru_massal == "Sukses":
                     dialog_konfirmasi_setujui(selected_ids, status_baru_massal)
@@ -629,12 +698,11 @@ if not df_retur.empty:
                     st.success(f"Berhasil memperbarui status menjadi '{status_baru_massal}'!")
                     st.rerun()
 
-    with act_col3:
+    with act_col4:
         st.markdown("")
-        btn_hapus_terpilih = st.button("🗑️ Hapus ID Terpilih", type="secondary", use_container_width=True)
-        if btn_hapus_terpilih:
+        if st.button("🗑️ Hapus ID", type="secondary", use_container_width=True):
             if not selected_ids:
-                st.warning("Silakan pilih minimal satu ID barang yang ingin dihapus!")
+                st.warning("Pilih minimal satu ID barang yang ingin dihapus!")
             else:
                 for item_id in selected_ids:
                     try:

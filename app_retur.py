@@ -126,7 +126,8 @@ DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
-    query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
+    # Mengambil semua kolom termasuk mengantisipasi variasi kapitalisasi id
+    query = supabase.table("barang_retur").select("*")
     if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
         query = query.eq("supplier", filter_supplier)
     if filter_status and filter_status != "SEMUA STATUS":
@@ -138,6 +139,13 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
 
     df = pd.DataFrame(response.data)
+
+    # Normalisasi nama kolom menjadi huruf kecil semua agar seragam (misal 'ID' jadi 'id')
+    df.columns = [str(c).lower() for c in df.columns]
+
+    # Pastikan kolom id benar-benar ada, jika tidak buat kolom id default
+    if "id" not in df.columns:
+        df["id"] = range(1, len(df) + 1)
 
     if cari:
         kw = cari.lower()
@@ -152,7 +160,6 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
 
 
 def cek_barang_duplikat(supplier, kode, nama):
-    """Mengecek apakah barang dengan supplier, kode, atau nama yang sama sudah ada di database."""
     query = supabase.table("barang_retur").select("id, kode, nama, supplier")
     if supplier and supplier != "Belum Tau":
         query = query.eq("supplier", supplier)
@@ -162,6 +169,7 @@ def cek_barang_duplikat(supplier, kode, nama):
         return False
     
     df_existing = pd.DataFrame(response.data)
+    df_existing.columns = [str(c).lower() for c in df_existing.columns]
     if df_existing.empty:
         return False
     

@@ -1,5 +1,4 @@
 import datetime
-import io
 from io import BytesIO
 import re
 import pandas as pd
@@ -8,9 +7,6 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
-from supabase import Client, create_client
-import os
-import streamlit as st
 from supabase import Client, create_client
 
 # --- CONFIG PAGE ---
@@ -23,9 +19,9 @@ st.set_page_config(
 # --- INISIALISASI SUPABASE ---
 @st.cache_resource
 def init_supabase() -> Client:
-  url: str = st.secrets["SUPABASE_URL"].strip()
-  key: str = st.secrets["SUPABASE_KEY"].strip()
-  return create_client(url, key)
+    url: str = st.secrets["SUPABASE_URL"].strip()
+    key: str = st.secrets["SUPABASE_KEY"].strip()
+    return create_client(url, key)
 
 supabase = init_supabase()
 
@@ -154,7 +150,7 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
                 df["status"].astype(str).str.lower().str.contains(kw)
             ]
         return df
-    except Exception as e:
+    except Exception:
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
 
 
@@ -470,18 +466,15 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
 
         if uploaded_csv is not None:
             try:
-                # Coba baca CSV (bisa menyesuaikan separator koma atau titik koma)
                 df_csv = pd.read_csv(uploaded_csv)
                 st.markdown("**Preview Data dari CSV:**")
                 st.dataframe(df_csv.head(5), use_container_width=True)
 
                 if st.button("💾 Proses & Simpan Data CSV ke Database", type="primary"):
                     records_to_insert = []
-                    # Normalisasi nama kolom menjadi huruf kecil agar mudah dicocokkan
                     df_csv.columns = [str(c).strip().lower() for c in df_csv.columns]
                     
                     for _, row in df_csv.iterrows():
-                        # Deteksi kolom secara fleksibel berdasarkan nama umum
                         kode = str(row.get("kode", row.get("barcode", "-")))
                         nama = str(row.get("nama", row.get("nama barang", row.get("barang", "Barang Retur"))))
                         
@@ -492,15 +485,12 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
 
                         try:
                             hpp = float(str(row.get("hpp", row.get("harga", 0))).replace(",", "").replace(".", ""))
-                            # Jika format hpp menggunakan titik sebagai pemisah ribuan standar indonesia, sesuaikan jika perlu:
-                            # Contoh sederhana: jika angka terlalu kecil atau ada titik ribuan, sesuaikan. Di sini kita ambil float standar.
                         except:
                             hpp = 0.0
 
                         ket = str(row.get("ket", row.get("keterangan", "Rusak")))
                         ed = str(row.get("ed", row.get("expired", "-")))
                         
-                        # Cek kolom supplier/status jika ada di CSV
                         sup_from_csv = row.get("supplier", None)
                         final_supp = sup_from_csv if sup_from_csv and str(sup_from_csv) in DAFTAR_SUPPLIER else csv_sup_default
                         

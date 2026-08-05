@@ -126,7 +126,6 @@ DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
-    # Mengambil semua kolom termasuk mengantisipasi variasi kapitalisasi id
     query = supabase.table("barang_retur").select("*")
     if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
         query = query.eq("supplier", filter_supplier)
@@ -139,11 +138,8 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
 
     df = pd.DataFrame(response.data)
-
-    # Normalisasi nama kolom menjadi huruf kecil semua agar seragam (misal 'ID' jadi 'id')
     df.columns = [str(c).lower() for c in df.columns]
 
-    # Pastikan kolom id benar-benar ada, jika tidak buat kolom id default
     if "id" not in df.columns:
         df["id"] = range(1, len(df) + 1)
 
@@ -366,10 +362,16 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
     with col1:
         if st.button("✅ Ya, Benar Disetujui", type="primary", use_container_width=True):
             for item_id in id_list:
-                if status_baru == "Sukses":
-                    supabase.table("barang_retur").update({"status": status_baru, "qty": 0, "total": 0}).eq("id", int(item_id)).execute()
-                else:
-                    supabase.table("barang_retur").update({"status": status_baru}).eq("id", int(item_id)).execute()
+                try:
+                    if pd.isna(item_id) or str(item_id).lower() == "none":
+                        continue
+                    valid_id = int(float(str(item_id)))
+                    if status_baru == "Sukses":
+                        supabase.table("barang_retur").update({"status": status_baru, "qty": 0, "total": 0}).eq("id", valid_id).execute()
+                    else:
+                        supabase.table("barang_retur").update({"status": status_baru}).eq("id", valid_id).execute()
+                except (ValueError, TypeError):
+                    continue
 
             st.success(f"Berhasil memperbarui status barang menjadi '{status_baru}'!")
             st.rerun()
@@ -574,13 +576,19 @@ if not df_retur.empty:
                 dialog_konfirmasi_setujui(selected_ids, status_baru_massal)
             else:
                 for item_id in selected_ids:
-                    supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", int(item_id)).execute()
+                    try:
+                        if pd.isna(item_id) or str(item_id).lower() == "none":
+                            continue
+                        valid_id = int(float(str(item_id)))
+                        supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", valid_id).execute()
+                    except (ValueError, TypeError):
+                        continue
                 st.success(f"Berhasil memperbarui status menjadi '{status_baru_massal}'!")
                 st.rerun()
 
     st.divider()
 
-   col_act1, col_act2 = st.columns(2)
+    col_act1, col_act2 = st.columns(2)
     with col_act1:
         if st.button("💾 Update Detail Edit Manual", use_container_width=True):
             for _, row in edited_df.iterrows():
@@ -625,15 +633,6 @@ if not df_retur.empty:
                         continue
                 st.success("Data berhasil dihapus!")
                 st.rerun()
-    with col_act2:
-        if st.button("🗑️ Hapus Data Retur Terpilih", use_container_width=True, type="secondary"):
-            if not selected_ids:
-                st.warning("Pilih data yang ingin dihapus terlebih dahulu.")
-            else:
-                for item_id in selected_ids:
-                    supabase.table("barang_retur").delete().eq("id", int(item_id)).execute()
-                st.success("Data berhasil dihapus!")
-                st.rerun()
 else:
     st.info("Tidak ada data barang retur yang ditemukan di database atau sesuai filter. Silakan tambah data baru melalui menu di atas.")
 
@@ -659,4 +658,3 @@ with col_pdf2:
         )
     else:
         st.button("📄 Download PDF Kosong", disabled=True, use_container_width=True)
-

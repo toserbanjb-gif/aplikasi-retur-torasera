@@ -1,7 +1,6 @@
 import datetime
 import io
 import re
-import sqlite3
 from io import BytesIO
 import pandas as pd
 import streamlit as st
@@ -9,6 +8,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from supabase import Client, create_client
 
 # --- CONFIG PAGE ---
 st.set_page_config(
@@ -17,7 +17,14 @@ st.set_page_config(
     layout="wide",
 )
 
-DB_NAME = "retur_barang.db"
+# --- INISIALISASI SUPABASE ---
+@st.cache_resource
+def init_supabase() -> Client:
+    url: str = st.secrets["SUPABASE_URL"]
+    key: str = st.secrets["SUPABASE_KEY"]
+    return create_client(url, key)
+
+supabase = init_supabase()
 
 DAFTAR_SUPPLIER = [
     "Belum Tau",
@@ -121,80 +128,6 @@ DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 DAFTAR_STATUS_PESANAN = ["Pending", "Diproses", "Selesai", "Dibatalkan"]
 
 
-def init_db():
-    """Membuat tabel jika belum ada, atau memperbarui kolom tanpa menghapus data SQLite lama."""
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-
-    # 1. Tabel Barang Retur
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS barang_retur (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            kode TEXT,
-            nama TEXT,
-            qty INTEGER,
-            hpp REAL,
-            total REAL,
-            ket TEXT,
-            ed TEXT,
-            supplier TEXT,
-            status TEXT DEFAULT 'Pengajuan',
-            tgl_input TEXT
-        )
-    """)
-
-    # 2. Tabel Barang Diskontinu
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS barang_diskontinu (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            kode TEXT,
-            nama TEXT,
-            kategori TEXT,
-            supplier TEXT,
-            alasan TEXT,
-            tgl_diskontinu TEXT
-        )
-    """)
-
-    # 3. Tabel Pesanan Customer
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pesanan_customer (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nama_customer TEXT,
-            no_hp TEXT,
-            kode_barang TEXT,
-            nama_barang TEXT,
-            qty INTEGER,
-            harga REAL,
-            total REAL,
-            tgl_pesan TEXT,
-            status TEXT DEFAULT 'Pending',
-            catatan TEXT
-        )
-    """)
-
-    # 4. Tabel Transaksi Pembelian PO (Fitur Baru)
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS pembelian_po (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            no_po TEXT,
-            supplier TEXT,
-            kode_barang TEXT,
-            nama_barang TEXT,
-            qty INTEGER,
-            hpp REAL,
-            harga_order REAL,
-            subtotal REAL,
-            tgl_po TEXT
-        )
-    """)
-    conn.commit()
-    conn.close()
-
-
-init_db()
-
-
 def parse_pasted_po_data(pasted_text):
     """Merapikan & memproses string hasil copy-paste tabel nota PO ke dalam DataFrame pandas."""
     lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
@@ -238,57 +171,79 @@ def parse_pasted_po_data(pasted_text):
     return pd.DataFrame(parsed_rows)
 
 
+# --- FUNGSI INTERAKSI SUPABASE ---
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
-    conn = sqlite3.connect(DB_NAME)
-    query = "SELECT id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input FROM barang_retur WHERE 1=1"
-    params = []
+    query = supabase.table("barang_retur").select("id, kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input")
     if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
-        query += " AND supplier = ?"
-        params.append(filter_supplier)
+        query = query.eq("supplier", filter_supplier)
     if filter_status and filter_status != "SEMUA STATUS":
-        query += " AND status = ?"
-        params.append(filter_status)
+        query = query.eq("status", filter_status)
+    
+    response = query.execute()
+    df = pd.DataFrame(response.data)
+
+    if df.empty:
+        return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
+
     if cari:
-        query += " AND (kode LIKE ? OR nama LIKE ? OR ket LIKE ? OR supplier LIKE ? OR status LIKE ?)"
-        kw = f"%{cari}%"
-        params.extend([kw, kw, kw, kw, kw])
-    df = pd.read_sql_query(query, conn, params=params)
-    conn.close()
+        kw = cari.lower()
+        df = df[
+            df["kode"].astype(str).str.lower().str.contains(kw) |
+            df["nama"].astype(str).str.lower().str.contains(kw) |
+            df["ket"].astype(str).str.lower().str.contains(kw) |
+            df["supplier"].astype(str).str.lower().str.contains(kw) |
+            df["status"].astype(str).str.lower().str.contains(kw)
+        ]
     return df
 
 
 def ambil_data_diskontinu(filter_supplier="SEMUA SUPPLIER", cari=""):
-    conn = sqlite3.connect(DB_NAME)
-    query = "SELECT id, kode, nama, kategori, supplier, alasan, tgl_diskontinu FROM barang_diskontinu WHERE 1=1"
-    params = []
+    query = supabase.table("barang_diskontinu").select("id, kode, nama, kategori, supplier, alasan, tgl_diskontinu")
     if filter_supplier and filter_supplier != "SEMUA SUPPLIER":
-        query += " AND supplier = ?"
-        params.append(filter_supplier)
+        query = query.eq("supplier", filter_supplier)
+    
+    response = query.execute()
+    df = pd.DataFrame(response.data)
+
+    if df.empty:
+        return pd.DataFrame(columns=["id", "kode", "nama", "kategori", "supplier", "alasan", "tgl_diskontinu"])
+
     if cari:
-        query += " AND (kode LIKE ? OR nama LIKE ? OR kategori LIKE ? OR supplier LIKE ? OR alasan LIKE ?)"
-        kw = f"%{cari}%"
-        params.extend([kw, kw, kw, kw, kw])
-    df = pd.read_sql_query(query, conn, params=params)
-    conn.close()
+        kw = cari.lower()
+        df = df[
+            df["kode"].astype(str).str.lower().str.contains(kw) |
+            df["nama"].astype(str).str.lower().str.contains(kw) |
+            df["kategori"].astype(str).str.lower().str.contains(kw) |
+            df["supplier"].astype(str).str.lower().str.contains(kw) |
+            df["alasan"].astype(str).str.lower().str.contains(kw)
+        ]
     return df
 
 
 def ambil_data_pesanan(filter_status="SEMUA STATUS", cari=""):
-    conn = sqlite3.connect(DB_NAME)
-    query = "SELECT id, nama_customer, no_hp, kode_barang, nama_barang, qty, harga, total, tgl_pesan, status, catatan FROM pesanan_customer WHERE 1=1"
-    params = []
+    query = supabase.table("pesanan_customer").select("id, nama_customer, no_hp, kode_barang, nama_barang, qty, harga, total, tgl_pesan, status, catatan")
     if filter_status and filter_status != "SEMUA STATUS":
-        query += " AND status = ?"
-        params.append(filter_status)
+        query = query.eq("status", filter_status)
+        
+    response = query.execute()
+    df = pd.DataFrame(response.data)
+
+    if df.empty:
+        return pd.DataFrame(columns=["id", "nama_customer", "no_hp", "kode_barang", "nama_barang", "qty", "harga", "total", "tgl_pesan", "status", "catatan"])
+
     if cari:
-        query += " AND (nama_customer LIKE ? OR no_hp LIKE ? OR kode_barang LIKE ? OR nama_barang LIKE ? OR status LIKE ?)"
-        kw = f"%{cari}%"
-        params.extend([kw, kw, kw, kw, kw])
-    df = pd.read_sql_query(query, conn, params=params)
-    conn.close()
+        kw = cari.lower()
+        df = df[
+            df["nama_customer"].astype(str).str.lower().str.contains(kw) |
+            df["no_hp"].astype(str).str.lower().str.contains(kw) |
+            df["kode_barang"].astype(str).str.lower().str.contains(kw) |
+            df["nama_barang"].astype(str).str.lower().str.contains(kw) |
+            df["status"].astype(str).str.lower().str.contains(kw)
+        ]
     return df
 
 
+# --- FUNGSI GENERATE PDF ---
 def generate_pdf(df_data, supplier_label):
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -637,22 +592,12 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
     col1, col2 = st.columns(2)
     with col1:
         if st.button("✅ Ya, Benar Disetujui", type="primary", use_container_width=True):
-            conn = sqlite3.connect(DB_NAME)
-            cursor = conn.cursor()
+            for item_id in id_list:
+                if status_baru == "Sukses":
+                    supabase.table("barang_retur").update({"status": status_baru, "qty": 0, "total": 0}).eq("id", item_id).execute()
+                else:
+                    supabase.table("barang_retur").update({"status": status_baru}).eq("id", item_id).execute()
 
-            if status_baru == "Sukses":
-                cursor.execute(
-                    f"UPDATE barang_retur SET status=?, qty=0, total=0 WHERE id IN ({','.join(['?']*len(id_list))})",
-                    [status_baru] + id_list,
-                )
-            else:
-                cursor.execute(
-                    f"UPDATE barang_retur SET status=? WHERE id IN ({','.join(['?']*len(id_list))})",
-                    [status_baru] + id_list,
-                )
-
-            conn.commit()
-            conn.close()
             st.session_state.select_all = False
             st.success(f"Berhasil memperbarui status barang menjadi '{status_baru}'!")
             st.rerun()
@@ -680,7 +625,7 @@ st.sidebar.caption("Torasera Nurja Berkah © 2026")
 
 
 # ==========================================
-# HALAMAN BARU: ANALISIS PO & PRODUK TERLARIS
+# HALAMAN 1: ANALISIS PO & PRODUK TERLARIS
 # ==========================================
 if menu == "📈 Analisis PO & Produk Terlaris":
     st.title("📈 Analisis Pembelian PO & Produk Terlaris")
@@ -712,15 +657,20 @@ if menu == "📈 Analisis PO & Produk Terlaris":
                 st.dataframe(df_parsed, use_container_width=True)
 
                 if st.button("💾 Simpan Transaksi PO Ini Ke Database", type="primary"):
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
+                    records = []
                     for _, r in df_parsed.iterrows():
-                        cursor.execute("""
-                            INSERT INTO pembelian_po (no_po, supplier, kode_barang, nama_barang, qty, hpp, harga_order, subtotal, tgl_po)
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """, (po_number, po_supplier, r["Kode"], r["Nama Barang"], r["Qty"], r["HPP"], r["Harga Order"], r["Subtotal"], str(po_date)))
-                    conn.commit()
-                    conn.close()
+                        records.append({
+                            "no_po": po_number,
+                            "supplier": po_supplier,
+                            "kode_barang": str(r["Kode"]),
+                            "nama_barang": str(r["Nama Barang"]),
+                            "qty": int(r["Qty"]),
+                            "hpp": float(r["HPP"]),
+                            "harga_order": float(r["Harga Order"]),
+                            "subtotal": float(r["Subtotal"]),
+                            "tgl_po": str(po_date)
+                        })
+                    supabase.table("pembelian_po").insert(records).execute()
                     st.success("Data PO berhasil disimpan & masuk ke grafik analisis bulanan!")
                     st.rerun()
             else:
@@ -729,9 +679,8 @@ if menu == "📈 Analisis PO & Produk Terlaris":
     with tab_analisis:
         st.subheader("📊 Analisis Produk Sering Dibeli / Fast Moving")
 
-        conn = sqlite3.connect(DB_NAME)
-        df_po_all = pd.read_sql_query("SELECT * FROM pembelian_po", conn)
-        conn.close()
+        response = supabase.table("pembelian_po").select("*").execute()
+        df_po_all = pd.DataFrame(response.data)
 
         if not df_po_all.empty:
             df_po_all["tgl_po"] = pd.to_datetime(df_po_all["tgl_po"], errors="coerce")
@@ -800,7 +749,7 @@ if menu == "📈 Analisis PO & Produk Terlaris":
 
 
 # ==========================================
-# HALAMAN 1: RETUR BARANG
+# HALAMAN 2: RETUR BARANG
 # ==========================================
 elif menu == "📦 Retur Barang":
     st.title("📦 Retur Barang - Torasera Nurja Berkah")
@@ -817,422 +766,201 @@ elif menu == "📦 Retur Barang":
             st.bar_chart(top_sup_retur.set_index("supplier"))
 
         with g_col2:
-            st.markdown("### 📌 Distribusi Status Retur Barang")
-            status_counts = df_semua["status"].value_counts().reset_index()
-            status_counts.columns = ["Status", "Jumlah Item"]
-            st.bar_chart(status_counts.set_index("Status"))
+            st.markdown("### 📈 Status Distribusi Retur")
+            status_dist = df_semua.groupby("status")["id"].count().reset_index().rename(columns={"id": "jumlah"})
+            st.bar_chart(status_dist.set_index("status"))
 
-        st.divider()
+    st.divider()
 
-    tab_input_retur, tab_data_retur = st.tabs(["📥 Input Retur Baru", "📋 Data & Kelola Retur"])
+    col_f1, col_f2, col_f3 = st.columns(3)
+    with col_f1:
+        f_sup = st.selectbox("Filter Supplier Retur:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER)
+    with col_f2:
+        f_stat = st.selectbox("Filter Status Retur:", ["SEMUA STATUS"] + DAFTAR_STATUS)
+    with col_f3:
+        f_cari = st.text_input("Cari Kode / Nama / Ket Retur:")
 
-    with tab_input_retur:
-        st.subheader("📝 Form Input Barang Retur")
-        with st.form("form_retur", clear_on_submit=True):
-            col_r1, col_r2 = st.columns(2)
-            with col_r1:
-                r_kode = st.text_input("Kode / Barcode Barang")
-                r_nama = st.text_input("Nama Barang")
-                r_qty = st.number_input("Qty Retur", min_value=1, value=1, step=1)
-                r_hpp = st.number_input("HPP / Harga Beli Satuan (Rp)", min_value=0.0, value=0.0, step=100.0)
+    df_retur = ambil_data_retur(f_sup, f_stat, f_cari)
 
-            with col_r2:
-                r_ket = st.text_input("Keterangan Retur", placeholder="Contoh: ED Dekat, Rusak, Segel Terbuka")
-                r_ed = st.text_input("Expired Date (ED)", placeholder="YYYY-MM-DD / MM-YY")
-                r_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER, key="retur_sup_input")
-                r_status = st.selectbox("Status Retur", DAFTAR_STATUS, index=0)
+    st.subheader("📋 Daftar Barang Retur")
+    st.dataframe(df_retur, use_container_width=True, hide_index=True)
 
-            btn_simpan_retur = st.form_submit_button("💾 Simpan Barang Retur", type="primary")
+    with st.expander("➕ Tambah Data Retur Baru"):
+        with st.form("form_tambah_retur"):
+            in_kode = st.text_input("Kode Barang")
+            in_nama = st.text_input("Nama Barang")
+            in_qty = st.number_input("Qty Retur", min_value=1, value=1)
+            in_hpp = st.number_input("HPP / Harga Satuan", min_value=0.0, value=0.0)
+            in_ket = st.text_input("Keterangan Retur", value="Rusak / ED")
+            in_ed = st.text_input("Expired Date (ED)", value="-")
+            in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
 
-            if btn_simpan_retur:
-                if not r_nama:
-                    st.error("Nama barang wajib diisi!")
-                else:
-                    r_total = r_qty * r_hpp
-                    r_tgl = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if st.form_submit_button("Simpan Data Retur"):
+                total_val = in_qty * in_hpp
+                tgl_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                supabase.table("barang_retur").insert({
+                    "kode": in_kode,
+                    "nama": in_nama,
+                    "qty": in_qty,
+                    "hpp": in_hpp,
+                    "total": total_val,
+                    "ket": in_ket,
+                    "ed": in_ed,
+                    "supplier": in_sup,
+                    "status": "Pengajuan",
+                    "tgl_input": tgl_str
+                }).execute()
+                st.success("Barang retur berhasil ditambahkan!")
+                st.rerun()
 
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO barang_retur (kode, nama, qty, hpp, total, ket, ed, supplier, status, tgl_input)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (r_kode, r_nama, r_qty, r_hpp, r_total, r_ket, r_ed, r_supplier, r_status, r_tgl))
-                    conn.commit()
-                    conn.close()
-                    st.success("Data retur barang berhasil disimpan!")
-                    st.rerun()
-
-    with tab_data_retur:
-        st.subheader("📋 Daftar & Pembaruan Status Retur")
-
-        fc1, fc2, fc3 = st.columns(3)
-        with fc1:
-            f_sup = st.selectbox("Filter Supplier:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_retur")
-        with fc2:
-            f_stat = st.selectbox("Filter Status:", ["SEMUA STATUS"] + DAFTAR_STATUS, key="f_stat_retur")
-        with fc3:
-            f_cari = st.text_input("🔍 Cari Data Retur:", placeholder="Kode, nama, ket...", key="f_cari_retur")
-
-        df_retur = ambil_data_retur(filter_supplier=f_sup, filter_status=f_stat, cari=f_cari)
-
-        if not df_retur.empty:
-            m_r1, m_r2, m_r3 = st.columns(3)
-            m_r1.metric("Total Item Retur", len(df_retur))
-            m_r2.metric("Total Qty Retur", int(df_retur["qty"].sum()))
-            m_r3.metric("Total Nominal Retur", f"Rp {df_retur['total'].sum():,.0f}")
-
-            st.divider()
-
-            if "select_all" not in st.session_state:
-                st.session_state.select_all = False
-
-            col_a1, col_a2, _ = st.columns([1, 2, 3])
-            with col_a1:
-                if st.checkbox("Pilih Semua Baris", value=st.session_state.select_all):
-                    st.session_state.select_all = True
-                else:
-                    st.session_state.select_all = False
-
-            # Render Table / Selection Form
-            selected_ids = []
-            for idx, row in df_retur.iterrows():
-                cols = st.columns([0.5, 2, 4, 1, 2, 2, 2, 2, 2])
-                checked = cols[0].checkbox("", value=st.session_state.select_all, key=f"chk_{row['id']}")
-                if checked:
-                    selected_ids.append(row["id"])
-
-                cols[1].write(row["kode"])
-                cols[2].write(row["nama"])
-                cols[3].write(row["qty"])
-                cols[4].write(f"Rp {row['total']:,.0f}")
-                cols[5].write(row["ket"])
-                cols[6].write(row["ed"])
-                cols[7].write(row["supplier"])
-                cols[8].write(row["status"])
-
-            st.divider()
-
-            col_b1, col_b2, col_b3 = st.columns(3)
-            with col_b1:
-                status_update_pilihan = st.selectbox("Ubah Status Terpilih Ke:", DAFTAR_STATUS, key="stat_bulk")
-                if st.button("🔄 Perbarui Status Item Terpilih", type="primary"):
-                    if not selected_ids:
-                        st.warning("Pilih minimal satu barang terlebih dahulu!")
-                    else:
-                        if status_update_pilihan == "Sukses":
-                            dialog_konfirmasi_setujui(selected_ids, status_update_pilihan)
-                        else:
-                            conn = sqlite3.connect(DB_NAME)
-                            cursor = conn.cursor()
-                            cursor.execute(
-                                f"UPDATE barang_retur SET status=? WHERE id IN ({','.join(['?']*len(selected_ids))})",
-                                [status_update_pilihan] + selected_ids
-                            )
-                            conn.commit()
-                            conn.close()
-                            st.success("Status barang berhasil diperbarui!")
-                            st.rerun()
-
-            with col_b2:
-                if st.button("🗑️ Hapus Item Terpilih"):
-                    if not selected_ids:
-                        st.warning("Pilih minimal satu barang yang akan dihapus!")
-                    else:
-                        conn = sqlite3.connect(DB_NAME)
-                        cursor = conn.cursor()
-                        cursor.execute(
-                            f"DELETE FROM barang_retur WHERE id IN ({','.join(['?']*len(selected_ids))})",
-                            selected_ids
-                        )
-                        conn.commit()
-                        conn.close()
-                        st.success("Item terpilih berhasil dihapus!")
-                        st.rerun()
-
-            with col_b3:
-                st.markdown("### 📄 Cetak Nota Retur PDF")
-                target_supplier = f_sup if f_sup != "SEMUA SUPPLIER" else "SEMUA SUPPLIER"
-                pdf_bytes = generate_pdf(df_retur, target_supplier)
-                st.download_button(
-                    label="📥 Download PDF Nota Retur",
-                    data=pdf_bytes,
-                    file_name=f"Nota_Retur_{target_supplier}_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf"
-                )
-        else:
-            st.info("Tidak ada data retur barang yang ditemukan.")
+    if not df_retur.empty:
+        st.subheader("🖨️ Cetak Nota Retur")
+        sup_cetak = st.selectbox("Pilih Supplier untuk dicetak Nota:", df_retur["supplier"].unique())
+        df_cetak = df_retur[df_retur["supplier"] == sup_cetak]
+        pdf_bytes = generate_pdf(df_cetak, sup_cetak)
+        st.download_button(
+            f"📄 Download Nota Retur ({sup_cetak})",
+            data=pdf_bytes,
+            file_name=f"Nota_Retur_{sup_cetak}.pdf",
+            mime="application/pdf"
+        )
 
 
 # ==========================================
-# HALAMAN 2: REKAP RETUR BULANAN & ED
+# HALAMAN 3: REKAP RETUR BULANAN & ED
 # ==========================================
 elif menu == "📊 Rekap Retur Bulanan & ED":
-    st.title("📊 Rekap Retur Bulanan & Analysis ED")
-    st.markdown("Halaman ini merangkum data retur barang berdasarkan kriteria ED / Expired Date untuk evaluasi perulangan produk retur.")
+    st.title("📊 Rekap Retur Bulanan & Analisis ED")
 
-    conn = sqlite3.connect(DB_NAME)
-    df_all_retur = pd.read_sql_query("SELECT * FROM barang_retur", conn)
-    conn.close()
+    df_retur_all = ambil_data_retur()
+    if not df_retur_all.empty:
+        df_retur_all["tgl_input"] = pd.to_datetime(df_retur_all["tgl_input"], errors="coerce")
+        df_retur_all["bulan_tahun"] = df_retur_all["tgl_input"].dt.strftime("%Y-%m")
 
-    if not df_all_retur.empty:
-        df_all_retur["tgl_input_dt"] = pd.to_datetime(df_all_retur["tgl_input"], errors="coerce")
-        df_all_retur["bulan_tahun"] = df_all_retur["tgl_input_dt"].dt.strftime("%Y-%m")
+        pilihan_bulan = st.selectbox(
+            "Pilih Periode Bulan:",
+            sorted(df_retur_all["bulan_tahun"].dropna().unique().tolist(), reverse=True)
+        )
 
-        col_rk1, col_rk2 = st.columns(2)
-        with col_rk1:
-            pilihan_bulan_rekap = st.selectbox(
-                "Pilih Periode Bulan Retur:",
-                ["SEMUA PERIODE"] + sorted(df_all_retur["bulan_tahun"].dropna().unique().tolist(), reverse=True)
-            )
-        with col_rk2:
-            threshold_ed = st.number_input("Batas Frekuensi Retur ED untuk Rekomendasi Diskontinu:", min_value=1, value=2, step=1)
-
-        df_filtered_rekap = df_all_retur.copy()
-        if pilihan_bulan_rekap != "SEMUA PERIODE":
-            df_filtered_rekap = df_filtered_rekap[df_filtered_rekap["bulan_tahun"] == pilihan_bulan_rekap]
+        df_bulan = df_retur_all[df_retur_all["bulan_tahun"] == pilihan_bulan]
 
         # Filter khusus retur ED
-        df_ed = df_filtered_rekap[df_filtered_rekap["ket"].str.contains("ED|expired|kadaluarsa|exp", case=False, na=False)]
+        df_ed = df_bulan[df_bulan["ket"].str.contains("ED|expired|kadaluarsa", case=False, na=False)]
 
-        st.divider()
+        rekap_ed = df_ed.groupby(["kode", "nama", "supplier"]).agg(
+            frekuensi_ed=("id", "count"),
+            total_qty_ed=("qty", "sum")
+        ).reset_index()
 
-        if not df_ed.empty:
-            rekap_ed = df_ed.groupby(["kode", "nama", "supplier"]).agg(
-                frekuensi_ed=("id", "count"),
-                total_qty_ed=("qty", "sum"),
-                total_nominal_ed=("total", "sum")
-            ).reset_index()
+        rekap_ed["rekomendasi_dis"] = rekap_ed["frekuensi_ed"] >= 2
 
-            rekap_ed["rekomendasi_dis"] = rekap_ed["frekuensi_ed"] >= threshold_ed
+        st.subheader(f"📌 Rekap Produk Retur ED - Periode {pilihan_bulan}")
+        st.dataframe(rekap_ed, use_container_width=True)
 
-            st.subheader("⚠️ Produk Berulang Retur ED & Rekomendasi Diskontinu")
-            st.dataframe(
-                rekap_ed,
-                column_config={
-                    "rekomendasi_dis": st.column_config.CheckboxColumn("Rekomendasi Diskontinu?"),
-                    "total_nominal_ed": st.column_config.NumberColumn("Total Nominal ED", format="Rp %'d")
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-
-            # Opsi otomatis masukkan ke diskontinu
-            item_dis_rekomendasi = rekap_ed[rekap_ed["rekomendasi_dis"] == True]
-            if not item_dis_rekomendasi.empty:
-                st.warning(f"Ditemukan {len(item_dis_rekomendasi)} produk yang telah melebihi batas frekuensi retur ED ({threshold_ed}x)!")
-                if st.button("🚀 Pindahkan Semua Produk Rekomendasi Ini Ke List Diskontinu", type="primary"):
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    tgl_now = datetime.datetime.now().strftime("%Y-%m-%d")
-                    for _, item in item_dis_rekomendasi.iterrows():
-                        cursor.execute("""
-                            INSERT INTO barang_diskontinu (kode, nama, kategori, supplier, alasan, tgl_diskontinu)
-                            VALUES (?, ?, ?, ?, ?, ?)
-                        """, (item["kode"], item["nama"], "Automated ED", item["supplier"], f"Retur ED Berulang ({item['frekuensi_ed']}x)", tgl_now))
-                    conn.commit()
-                    conn.close()
-                    st.success("Produk berhasil ditambahkan ke daftar Barang Diskontinu!")
-                    st.rerun()
-
-            st.divider()
-            pdf_bytes_rekap = generate_pdf_rekap_ed(rekap_ed, pilihan_bulan_rekap)
-            st.download_button(
-                label="📥 Download Laporan Rekap Retur ED (PDF)",
-                data=pdf_bytes_rekap,
-                file_name=f"Rekap_Retur_ED_{pilihan_bulan_rekap}.pdf",
-                mime="application/pdf"
-            )
-        else:
-            st.info("Tidak ada data retur dengan keterangan ED/Expired pada periode ini.")
+        pdf_rekap = generate_pdf_rekap_ed(rekap_ed, pilihan_bulan)
+        st.download_button(
+            "📄 Download Laporan Rekap ED (PDF)",
+            data=pdf_rekap,
+            file_name=f"Rekap_ED_{pilihan_bulan}.pdf",
+            mime="application/pdf"
+        )
     else:
-        st.info("Belum ada data retur barang.")
+        st.info("Belum ada data retur yang tersimpan.")
 
 
 # ==========================================
-# HALAMAN 3: BARANG DISKONTINU
+# HALAMAN 4: BARANG DISKONTINU
 # ==========================================
 elif menu == "🚫 Barang Diskontinu":
-    st.title("🚫 Kelola Barang Diskontinu")
-    st.markdown("Pencatatan item yang sudah tidak dijual/dipasok lagi beserta penerbitan Surat Pemberitahuan Retur / Delist.")
+    st.title("🚫 Manajemen Barang Diskontinu")
 
-    tab_in_dis, tab_data_dis = st.tabs(["📥 Tambah Item Diskontinu", "📋 Daftar & Surat Delist"])
+    f_sup_dis = st.selectbox("Filter Supplier Diskontinu:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER)
+    f_cari_dis = st.text_input("Cari Barang Diskontinu:")
 
-    with tab_in_dis:
-        st.subheader("📝 Tambah Barang Diskontinu Baru")
-        with st.form("form_diskontinu", clear_on_submit=True):
-            cd1, cd2 = st.columns(2)
-            with cd1:
-                d_kode = st.text_input("Kode / Barcode Barang")
-                d_nama = st.text_input("Nama Barang")
-                d_kategori = st.text_input("Kategori Produk", placeholder="Contoh: Snack, Sembako, Kosmetik")
-            with cd2:
-                d_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER, key="dis_sup_input")
-                d_alasan = st.text_input("Alasan Diskontinu", placeholder="Contoh: Penjualan Lambat, Pabrik Stop Produksi, ED Berulang")
-                d_tgl = st.date_input("Tanggal Diskontinu", datetime.date.today())
+    df_dis = ambil_data_diskontinu(f_sup_dis, f_cari_dis)
+    st.dataframe(df_dis, use_container_width=True, hide_index=True)
 
-            btn_simpan_dis = st.form_submit_button("💾 Simpan Barang Diskontinu", type="primary")
+    with st.expander("➕ Tambah Barang Diskontinu Baru"):
+        with st.form("form_diskontinu"):
+            d_kode = st.text_input("Kode Barang")
+            d_nama = st.text_input("Nama Barang")
+            d_kat = st.text_input("Kategori Barang")
+            d_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+            d_alasan = st.text_area("Alasan Diskontinu", value="Penjualan lambat / ED berulang")
 
-            if btn_simpan_dis:
-                if not d_nama:
-                    st.error("Nama barang wajib diisi!")
-                else:
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO barang_diskontinu (kode, nama, kategori, supplier, alasan, tgl_diskontinu)
-                        VALUES (?, ?, ?, ?, ?, ?)
-                    """, (d_kode, d_nama, d_kategori, d_supplier, d_alasan, str(d_tgl)))
-                    conn.commit()
-                    conn.close()
-                    st.success("Barang diskontinu berhasil ditambahkan!")
-                    st.rerun()
+            if st.form_submit_button("Simpan Data Diskontinu"):
+                tgl_dis = datetime.date.today().strftime("%Y-%m-%d")
+                supabase.table("barang_diskontinu").insert({
+                    "kode": d_kode,
+                    "nama": d_nama,
+                    "kategori": d_kat,
+                    "supplier": d_sup,
+                    "alasan": d_alasan,
+                    "tgl_diskontinu": tgl_dis
+                }).execute()
+                st.success("Barang diskontinu berhasil ditambahkan!")
+                st.rerun()
 
-    with tab_data_dis:
-        st.subheader("📋 Daftar Barang Diskontinu")
+    if not df_dis.empty:
+        st.subheader("🖨️ Cetak Surat Pemberitahuan Diskontinu")
+        sup_dis_cetak = st.selectbox("Pilih Supplier:", df_dis["supplier"].unique(), key="sup_dis_cetak")
+        df_dis_cetak = df_dis[df_dis["supplier"] == sup_dis_cetak]
 
-        fd1, fd2 = st.columns(2)
-        with fd1:
-            f_sup_dis = st.selectbox("Filter Supplier:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_dis")
-        with fd2:
-            f_cari_dis = st.text_input("🔍 Cari Barang Diskontinu:", placeholder="Kode, nama, alasan...", key="f_cari_dis")
-
-        df_dis = ambil_data_diskontinu(filter_supplier=f_sup_dis, cari=f_cari_dis)
-
-        if not df_dis.empty:
-            st.dataframe(df_dis, use_container_width=True, hide_index=True)
-
-            st.divider()
-            col_dis_pdf1, col_dis_pdf2 = st.columns(2)
-
-            with col_dis_pdf1:
-                st.markdown("### 📄 Cetak Surat Delist / Retur Diskontinu")
-                target_supplier_dis = f_sup_dis if f_sup_dis != "SEMUA SUPPLIER" else "SEMUA SUPPLIER"
-                pdf_dis_bytes = generate_pdf_diskontinu(df_dis, target_supplier_dis)
-                st.download_button(
-                    label="📥 Download Surat Pemberitahuan Delist PDF",
-                    data=pdf_dis_bytes,
-                    file_name=f"Surat_Delist_{target_supplier_dis}_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf"
-                )
-
-            with col_dis_pdf2:
-                st.markdown("### 🗑️ Hapus Data Diskontinu")
-                del_id = st.number_input("Masukkan ID Item yang Akan Dihapus:", min_value=1, step=1)
-                if st.button("Hapus Item Diskontinu"):
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM barang_diskontinu WHERE id=?", (del_id,))
-                    conn.commit()
-                    conn.close()
-                    st.success(f"Item dengan ID {del_id} berhasil dihapus!")
-                    st.rerun()
-        else:
-            st.info("Tidak ada data barang diskontinu.")
+        pdf_dis = generate_pdf_diskontinu(df_dis_cetak, sup_dis_cetak)
+        st.download_button(
+            f"📄 Download Surat Diskontinu ({sup_dis_cetak})",
+            data=pdf_dis,
+            file_name=f"Surat_Diskontinu_{sup_dis_cetak}.pdf",
+            mime="application/pdf"
+        )
 
 
 # ==========================================
-# HALAMAN 4: PESANAN CUSTOMER
+# HALAMAN 5: PESANAN CUSTOMER
 # ==========================================
 elif menu == "🛒 Pesanan Customer":
-    st.title("🛒 Management Pesanan Customer / Pre-Order")
-    st.markdown("Pencatatan pesanan khusus/indent customer dan pemantauan status pemrosesannya.")
+    st.title("🛒 Manajemen Pesanan Customer / Pre-Order")
 
-    tab_in_psn, tab_data_psn = st.tabs(["📥 Input Pesanan Baru", "📋 Daftar & Status Pesanan"])
+    f_stat_p = st.selectbox("Filter Status Pesanan:", ["SEMUA STATUS"] + DAFTAR_STATUS_PESANAN)
+    f_cari_p = st.text_input("Cari Nama Customer / Barang / No HP:")
 
-    with tab_in_psn:
-        st.subheader("📝 Form Input Pesanan Customer")
-        with st.form("form_pesanan", clear_on_submit=True):
-            cp1, cp2 = st.columns(2)
-            with cp1:
-                p_nama_cust = st.text_input("Nama Customer / Pelanggan")
-                p_hp = st.text_input("No. HP / WhatsApp")
-                p_kode_brg = st.text_input("Kode Barang (Opsional)")
-                p_nama_brg = st.text_input("Nama Barang Pesanan")
-            with cp2:
-                p_qty = st.number_input("Qty Pesanan", min_value=1, value=1, step=1)
-                p_harga = st.number_input("Harga Satuan (Rp)", min_value=0.0, value=0.0, step=500.0)
-                p_catatan = st.text_area("Catatan Khusus", placeholder="Contoh: Titip saat promo, Merk khusus, DP Rp 50.000")
-                p_status = st.selectbox("Status Pesanan", DAFTAR_STATUS_PESANAN, index=0)
+    df_pesanan = ambil_data_pesanan(f_stat_p, f_cari_p)
+    st.dataframe(df_pesanan, use_container_width=True, hide_index=True)
 
-            btn_simpan_psn = st.form_submit_button("💾 Simpan Pesanan Customer", type="primary")
+    with st.expander("➕ Tambah Pesanan Customer Baru"):
+        with st.form("form_pesanan"):
+            p_cust = st.text_input("Nama Customer")
+            p_hp = st.text_input("No HP / WhatsApp")
+            p_kode = st.text_input("Kode Barang")
+            p_nama = st.text_input("Nama Barang")
+            p_qty = st.number_input("Qty Pesanan", min_value=1, value=1)
+            p_harga = st.number_input("Harga Satuan (Rp)", min_value=0.0, value=0.0)
+            p_catatan = st.text_input("Catatan / Request Khusus")
 
-            if btn_simpan_psn:
-                if not p_nama_cust or not p_nama_brg:
-                    st.error("Nama customer dan nama barang wajib diisi!")
-                else:
-                    p_total = p_qty * p_harga
-                    p_tgl = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            if st.form_submit_button("Simpan Pesanan"):
+                p_total = p_qty * p_harga
+                tgl_p = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                supabase.table("pesanan_customer").insert({
+                    "nama_customer": p_cust,
+                    "no_hp": p_hp,
+                    "kode_barang": p_kode,
+                    "nama_barang": p_nama,
+                    "qty": p_qty,
+                    "harga": p_harga,
+                    "total": p_total,
+                    "tgl_pesan": tgl_p,
+                    "status": "Pending",
+                    "catatan": p_catatan
+                }).execute()
+                st.success("Pesanan customer berhasil dicatat!")
+                st.rerun()
 
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        INSERT INTO pesanan_customer (nama_customer, no_hp, kode_barang, nama_barang, qty, harga, total, tgl_pesan, status, catatan)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    """, (p_nama_cust, p_hp, p_kode_brg, p_nama_brg, p_qty, p_harga, p_total, p_tgl, p_status, p_catatan))
-                    conn.commit()
-                    conn.close()
-                    st.success("Pesanan customer berhasil disimpan!")
-                    st.rerun()
-
-    with tab_data_psn:
-        st.subheader("📋 Daftar Pesanan Customer")
-
-        fp1, fp2 = st.columns(2)
-        with fp1:
-            f_stat_psn = st.selectbox("Filter Status Pesanan:", ["SEMUA STATUS"] + DAFTAR_STATUS_PESANAN, key="f_stat_psn")
-        with fp2:
-            f_cari_psn = st.text_input("🔍 Cari Pesanan:", placeholder="Nama customer, HP, barang...", key="f_cari_psn")
-
-        df_psn = ambil_data_pesanan(filter_status=f_stat_psn, cari=f_cari_psn)
-
-        if not df_psn.empty:
-            st.dataframe(
-                df_psn,
-                column_config={
-                    "harga": st.column_config.NumberColumn("Harga Satuan", format="Rp %'d"),
-                    "total": st.column_config.NumberColumn("Total", format="Rp %'d"),
-                },
-                use_container_width=True,
-                hide_index=True
-            )
-
-            st.divider()
-
-            col_psn_up1, col_psn_up2, col_psn_up3 = st.columns(3)
-
-            with col_psn_up1:
-                st.markdown("### 🔄 Ubah Status Pesanan")
-                target_psn_id = st.number_input("ID Pesanan:", min_value=1, step=1, key="id_psn_up")
-                new_psn_stat = st.selectbox("Status Baru:", DAFTAR_STATUS_PESANAN, key="stat_psn_up")
-                if st.button("Update Status Pesanan"):
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("UPDATE pesanan_customer SET status=? WHERE id=?", (new_psn_stat, target_psn_id))
-                    conn.commit()
-                    conn.close()
-                    st.success("Status pesanan berhasil diperbarui!")
-                    st.rerun()
-
-            with col_psn_up2:
-                st.markdown("### 🗑️ Hapus Pesanan")
-                del_psn_id = st.number_input("ID Pesanan yang Dihapus:", min_value=1, step=1, key="id_psn_del")
-                if st.button("Hapus Pesanan"):
-                    conn = sqlite3.connect(DB_NAME)
-                    cursor = conn.cursor()
-                    cursor.execute("DELETE FROM pesanan_customer WHERE id=?", (del_psn_id,))
-                    conn.commit()
-                    conn.close()
-                    st.success("Data pesanan berhasil dihapus!")
-                    st.rerun()
-
-            with col_psn_up3:
-                st.markdown("### 📄 Cetak Nota Pesanan PDF")
-                pdf_psn_bytes = generate_pdf_pesanan(df_psn)
-                st.download_button(
-                    label="📥 Download Nota Pesanan Customer PDF",
-                    data=pdf_psn_bytes,
-                    file_name=f"Nota_Pesanan_{datetime.datetime.now().strftime('%Y%m%d')}.pdf",
-                    mime="application/pdf"
-                )
-        else:
-            st.info("Tidak ada data pesanan customer.")
+    if not df_pesanan.empty:
+        st.subheader("🖨️ Cetak Nota Pesanan")
+        pdf_p = generate_pdf_pesanan(df_pesanan)
+        st.download_button(
+            "📄 Download Nota Pesanan Customer (PDF)",
+            data=pdf_p,
+            file_name="Nota_Pesanan_Customer.pdf",
+            mime="application/pdf"
+        )

@@ -1,6 +1,7 @@
 import datetime
 import io
 from io import BytesIO
+import re
 import pandas as pd
 import streamlit as st
 from reportlab.lib import colors
@@ -154,6 +155,49 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
         return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
 
 
+def parse_pasted_retur_data(pasted_text):
+    """Merapikan & memproses string hasil copy-paste baris data retur ke dalam DataFrame pandas."""
+    lines = [line.strip() for line in pasted_text.strip().split("\n") if line.strip()]
+    if not lines:
+        return pd.DataFrame()
+
+    parsed_rows = []
+    for line in lines:
+        cols = re.split(r"\t+|\s{2,}", line)
+        if len(cols) >= 2:
+            if any(h in cols[0].lower() or h in cols[1].lower() for h in ["no", "kode", "status", "barang"]):
+                continue
+
+            def clean_num(val):
+                v = re.sub(r"[^\d.]", "", str(val).replace(",", "."))
+                try:
+                    return float(v) if "." in v else int(v) if v else 0
+                except:
+                    return 0
+
+            # Fleksibilitas urutan kolom hasil paste: [Kode, Nama, Qty, HPP, Ket, ED]
+            kode = cols[0] if len(cols) > 0 else "-"
+            nama = cols[1] if len(cols) > 1 else "Barang Retur"
+            qty = int(clean_num(cols[2])) if len(cols) > 2 and clean_num(cols[2]) > 0 else 1
+            hpp = clean_num(cols[3]) if len(cols) > 3 else 0
+            ket = cols[4] if len(cols) > 4 else "Rusak"
+            ed = cols[5] if len(cols) > 5 else "-"
+
+            subtotal = qty * hpp
+
+            parsed_rows.append({
+                "Kode": kode,
+                "Nama Barang": nama,
+                "Qty": qty,
+                "HPP": hpp,
+                "Total": subtotal,
+                "Keterangan": ket,
+                "ED": ed
+            })
+
+    return pd.DataFrame(parsed_rows)
+
+
 def generate_pdf_retur(df_data, supplier_label):
     buffer = BytesIO()
     doc = SimpleDocTemplate(
@@ -294,52 +338,93 @@ if not df_semua.empty:
 
 st.divider()
 
-# Bagian 2: Tambah Barang Retur Baru
-with st.expander("➕ Tambah Barang Retur Baru", expanded=False):
-    with st.form("form_tambah_retur", clear_on_submit=True):
-        f_in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+# Bagian 2: Tambah Barang Retur Baru (Form Satuan & Copy-Paste Massal)
+with st.expander("➕ Tambah Barang Retur Baru (Satuan & Copy-Paste)", expanded=False):
+    tab_form_satuan, tab_form_paste = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data Retur"])
+
+    with tab_form_satuan:
+        with st.form("form_tambah_retur", clear_on_submit=True):
+            f_in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER, key="satuan_sup")
+            
+            c1, c2 = st.columns(2)
+            with c1:
+                f_in_kode = st.text_input("Kode / Barcode")
+            with c2:
+                f_in_qty = st.number_input("Qty", min_value=1, value=1)
+
+            c3, c4 = st.columns(2)
+            with c3:
+                f_in_nama = st.text_input("Nama Barang")
+            with c4:
+                f_in_hpp = st.number_input("HPP (Rp)", min_value=0.0, value=0.0, step=500.0)
+
+            c5, c6, c7 = st.columns(3)
+            with c5:
+                f_in_ket = st.selectbox("Keterangan (sesuai ED / Rusak)", ["Rusak", "ED", "Lainnya"])
+            with c6:
+                f_in_ed = st.text_input("ED (Contoh: 2026-12-31 atau -)", value="-")
+            with c7:
+                f_in_status = st.selectbox("Status", DAFTAR_STATUS, index=0)
+
+            submitted = st.form_submit_button("💾 Simpan Barang Retur", type="primary")
+            if submitted:
+                if not f_in_nama.strip():
+                    st.error("Nama barang tidak boleh kosong!")
+                else:
+                    total_val = f_in_qty * f_in_hpp if f_in_status != "Sukses" else 0
+                    payload = {
+                        "supplier": f_in_sup,
+                        "kode": f_in_kode,
+                        "nama": f_in_nama,
+                        "qty": f_in_qty if f_in_status != "Sukses" else 0,
+                        "hpp": f_in_hpp,
+                        "total": total_val,
+                        "ket": f_in_ket,
+                        "ed": f_in_ed,
+                        "status": f_in_status,
+                        "tgl_input": str(datetime.date.today())
+                    }
+                    supabase.table("barang_retur").insert(payload).execute()
+                    st.success("Barang retur berhasil ditambahkan!")
+                    st.rerun()
+
+    with tab_form_paste:
+        st.subheader("📋 Input Retur Massal via Copy-Paste")
+        st.markdown("Blok tabel atau baris data dari Excel/Notepad, lalu *paste* ke dalam kotak di bawah ini:")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            f_in_kode = st.text_input("Kode / Barcode")
-        with c2:
-            f_in_qty = st.number_input("Qty", min_value=1, value=1)
+        paste_sup = st.selectbox("Pilih Supplier untuk Data Paste Ini", DAFTAR_SUPPLIER, key="paste_sup_target")
+        raw_paste_text = st.text_area(
+            "Paste Baris Data Retur (Format kolom: Kode | Nama Barang | Qty | HPP | Ket | ED):",
+            height=150,
+            placeholder="Contoh:\n8991234567890\tSunsilk Shampoo 170ml\t2\t15500\tRusak\t2026-12-31"
+        )
 
-        c3, c4 = st.columns(2)
-        with c3:
-            f_in_nama = st.text_input("Nama Barang")
-        with c4:
-            f_in_hpp = st.number_input("HPP (Rp)", min_value=0.0, value=0.0, step=500.0)
+        if raw_paste_text:
+            df_parsed_retur = parse_pasted_retur_data(raw_paste_text)
+            if not df_parsed_retur.empty:
+                st.markdown("**Preview Hasil Ekstraksi Otomatis:**")
+                st.dataframe(df_parsed_retur, use_container_width=True)
 
-        c5, c6, c7 = st.columns(3)
-        with c5:
-            f_in_ket = st.selectbox("Keterangan (sesuai ED / Rusak)", ["Rusak", "ED", "Lainnya"])
-        with c6:
-            f_in_ed = st.text_input("ED (Contoh: 2026-12-31 atau -)", value="-")
-        with c7:
-            f_in_status = st.selectbox("Status", DAFTAR_STATUS, index=0)
-
-        submitted = st.form_submit_button("💾 Simpan Barang Retur", type="primary")
-        if submitted:
-            if not f_in_nama.strip():
-                st.error("Nama barang tidak boleh kosong!")
+                if st.button("💾 Simpan Semua Data Paste ke Database Retur", type="primary"):
+                    records_to_insert = []
+                    for _, r in df_parsed_retur.iterrows():
+                        records_to_insert.append({
+                            "supplier": paste_sup,
+                            "kode": str(r["Kode"]),
+                            "nama": str(r["Nama Barang"]),
+                            "qty": int(r["Qty"]),
+                            "hpp": float(r["HPP"]),
+                            "total": float(r["Total"]),
+                            "ket": str(r["Keterangan"]),
+                            "ed": str(r["ED"]),
+                            "status": "Pengajuan",
+                            "tgl_input": str(datetime.date.today())
+                        })
+                    supabase.table("barang_retur").insert(records_to_insert).execute()
+                    st.success(f"Berhasil menyimpan {len(records_to_insert)} item barang retur ke database!")
+                    st.rerun()
             else:
-                total_val = f_in_qty * f_in_hpp if f_in_status != "Sukses" else 0
-                payload = {
-                    "supplier": f_in_sup,
-                    "kode": f_in_kode,
-                    "nama": f_in_nama,
-                    "qty": f_in_qty if f_in_status != "Sukses" else 0,
-                    "hpp": f_in_hpp,
-                    "total": total_val,
-                    "ket": f_in_ket,
-                    "ed": f_in_ed,
-                    "status": f_in_status,
-                    "tgl_input": str(datetime.date.today())
-                }
-                supabase.table("barang_retur").insert(payload).execute()
-                st.success("Barang retur berhasil ditambahkan!")
-                st.rerun()
+                st.warning("Format teks belum terbaca dengan benar. Pastikan tabel disalin dengan pemisah kolom (Tab/Spasi).")
 
 st.divider()
 
@@ -357,7 +442,6 @@ df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
 st.markdown("### 📋 Daftar Barang Retur")
 
 if not df_retur.empty:
-    # Tombol Pilih Semua / Batal Semua
     col_b1, col_b2 = st.columns([1, 6])
     with col_b1:
         if st.button("☑️ Pilih Semua"):
@@ -371,7 +455,6 @@ if not df_retur.empty:
     if "selected_rows" not in st.session_state:
         st.session_state.selected_rows = []
 
-    # Editor Data / Tabel interaktif dengan checkbox pilih baris
     edited_df = st.data_editor(
         df_retur,
         column_config={
@@ -401,7 +484,6 @@ if not df_retur.empty:
     # Bagian 4: Ubah Status Pengajuan (Pilih Massal / Satu-satu)
     st.markdown("### ⚡ Ubah Status Pengajuan (Pilih Massal / Satu-satu)")
     
-    # Ambil baris yang dipilih dari data editor jika ada kolom centang, atau kita gunakan input manual ID / multiselect ID
     list_all_ids = df_retur["id"].tolist()
     selected_ids = st.multiselect("Pilih ID Barang Retur yang Akan Diubah Statusnya:", options=list_all_ids, default=st.session_state.get("selected_rows", []))
     
@@ -428,7 +510,6 @@ if not df_retur.empty:
 
     st.divider()
 
-    # Tombol aksi tambahan baris bawah (Update Detail & Hapus Data)
     col_act1, col_act2 = st.columns(2)
     with col_act1:
         if st.button("💾 Update Detail Edit Manual", use_container_width=True):

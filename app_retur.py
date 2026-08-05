@@ -143,6 +143,10 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
     if "id" not in df.columns:
         df["id"] = range(1, len(df) + 1)
 
+    # Tambahkan kolom interaktif untuk centang Hapus & Edit di sebelah ID
+    df.insert(1, "hapus", False)
+    df.insert(2, "edit", False)
+
     if cari:
         kw = cari.lower()
         df = df[
@@ -239,12 +243,12 @@ def parse_pasted_retur_data(pasted_text):
                 if len(clean_cols) > 8:
                     stat_parsed = clean_cols[8]
 
-            subtotal = qty * hpp
+            subtotal = qty * hpp if stat_parsed != "Sukses" else 0
 
             parsed_rows.append({
                 "Kode": kode,
                 "Nama Barang": nama,
-                "Qty": qty,
+                "Qty": qty if stat_parsed != "Sukses" else 0,
                 "HPP": hpp,
                 "Total": subtotal,
                 "Keterangan": ket,
@@ -437,12 +441,15 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                     if is_duplicate:
                         st.warning("⚠️ Peringatan: Barang dengan Nama atau Kode tersebut sudah terdaftar di database untuk supplier ini!")
                     
-                    total_val = f_in_qty * f_in_hpp if f_in_status != "Sukses" else 0
+                    is_sukses = (f_in_status == "Sukses")
+                    final_qty = 0 if is_sukses else f_in_qty
+                    total_val = 0 if is_sukses else (f_in_qty * f_in_hpp)
+
                     payload = {
                         "supplier": f_in_sup,
                         "kode": f_in_kode if f_in_kode else "-",
                         "nama": f_in_nama,
-                        "qty": f_in_qty if f_in_status != "Sukses" else 0,
+                        "qty": final_qty,
                         "hpp": f_in_hpp,
                         "total": total_val,
                         "ket": f_in_ket,
@@ -469,13 +476,17 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                         final_supp = r["Supplier"] if r["Supplier"] and r["Supplier"] in DAFTAR_SUPPLIER else paste_sup_default
                         final_stat = r["Status"] if r["Status"] in DAFTAR_STATUS else "Pengajuan"
                         
+                        is_sukses = (final_stat == "Sukses")
+                        q_val = 0 if is_sukses else int(r["Qty"])
+                        t_val = 0 if is_sukses else float(r["Total"])
+
                         records_to_insert.append({
                             "supplier": final_supp,
                             "kode": str(r["Kode"]),
                             "nama": str(r["Nama Barang"]),
-                            "qty": int(r["Qty"]),
+                            "qty": q_val,
                             "hpp": float(r["HPP"]),
-                            "total": float(r["Total"]),
+                            "total": t_val,
                             "ket": str(r["Keterangan"]),
                             "ed": str(r["ED"]),
                             "status": final_stat,
@@ -497,13 +508,15 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                 records_to_insert = []
                 df_csv.columns = [str(c).strip().lower() for c in df_csv.columns]
                 for _, row in df_csv.iterrows():
+                    q_val = int(row.get("qty", 1))
+                    h_val = float(row.get("hpp", 0))
                     records_to_insert.append({
                         "supplier": csv_sup_default,
                         "kode": str(row.get("kode", "-")),
                         "nama": str(row.get("nama", "Barang")),
-                        "qty": int(row.get("qty", 1)),
-                        "hpp": float(row.get("hpp", 0)),
-                        "total": int(row.get("qty", 1)) * float(row.get("hpp", 0)),
+                        "qty": q_val,
+                        "hpp": h_val,
+                        "total": q_val * h_val,
                         "ket": str(row.get("ket", "Rusak")),
                         "ed": str(row.get("ed", "-")),
                         "status": "Pengajuan",
@@ -528,13 +541,12 @@ df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
 st.markdown("### 📋 Daftar Barang Retur")
 
 if not df_retur.empty:
-    if "selected_rows" not in st.session_state:
-        st.session_state.selected_rows = []
-
     edited_df = st.data_editor(
         df_retur,
         column_config={
             "id": st.column_config.NumberColumn("ID", disabled=True),
+            "hapus": st.column_config.CheckboxColumn("🗑️ Hapus", help="Centang untuk menghapus baris ini"),
+            "edit": st.column_config.CheckboxColumn("✏️ Edit", help="Centang untuk menyimpan perubahan baris ini"),
             "kode": st.column_config.TextColumn("Kode"),
             "nama": st.column_config.TextColumn("Nama Barang"),
             "qty": st.column_config.NumberColumn("Qty"),
@@ -557,9 +569,50 @@ if not df_retur.empty:
 
     st.divider()
 
-    st.markdown("### ⚡ Ubah Status Pengajuan (Pilih Massal / Satu-satu)")
+    # Proses aksi baris per baris berdasarkan centang di tabel
+    ada_perubahan = False
+    for _, row in edited_df.iterrows():
+        try:
+            raw_id = row["id"]
+            if pd.isna(raw_id) or str(raw_id).lower() == "none":
+                continue
+            item_id = int(float(str(raw_id)))
+        except (ValueError, TypeError):
+            continue
+
+        # Jika dicentang Hapus
+        if row.get("hapus") == True:
+            supabase.table("barang_retur").delete().eq("id", item_id).execute()
+            ada_perubahan = True
+
+        # Jika dicentang Edit
+        elif row.get("edit") == True:
+            is_sukses = (str(row["status"]) == "Sukses")
+            new_qty = 0 if is_sukses else int(row["qty"])
+            new_total = 0 if is_sukses else (int(row["qty"]) * float(row["hpp"]))
+            
+            supabase.table("barang_retur").update({
+                "kode": str(row["kode"]),
+                "nama": str(row["nama"]),
+                "qty": new_qty,
+                "hpp": float(row["hpp"]),
+                "total": float(new_total),
+                "ket": str(row["ket"]),
+                "ed": str(row["ed"]),
+                "supplier": str(row["supplier"]),
+                "status": str(row["status"])
+            }).eq("id", item_id).execute()
+            ada_perubahan = True
+
+    if ada_perubahan:
+        st.success("Perubahan baris berhasil diproses!")
+        st.rerun()
+
+    st.divider()
+
+    st.markdown("### ⚡ Ubah Status Pengajuan (Pilih Massal)")
     list_all_ids = df_retur["id"].tolist()
-    selected_ids = st.multiselect("Pilih ID Barang Retur yang Akan Diubah Statusnya:", options=list_all_ids, default=st.session_state.get("selected_rows", []))
+    selected_ids = st.multiselect("Pilih ID Barang Retur yang Akan Diubah Statusnya:", options=list_all_ids)
     
     col_s1, col_s2 = st.columns([2, 1])
     with col_s1:
@@ -586,53 +639,6 @@ if not df_retur.empty:
                 st.success(f"Berhasil memperbarui status menjadi '{status_baru_massal}'!")
                 st.rerun()
 
-    st.divider()
-
-    col_act1, col_act2 = st.columns(2)
-    with col_act1:
-        if st.button("💾 Update Detail Edit Manual", use_container_width=True):
-            for _, row in edited_df.iterrows():
-                try:
-                    raw_id = row["id"]
-                    if pd.isna(raw_id) or str(raw_id).lower() == "none":
-                        continue
-                    item_id = int(float(str(raw_id)))
-                except (ValueError, TypeError):
-                    continue
-
-                new_total = row["qty"] * row["hpp"] if row["status"] != "Sukses" else 0
-                new_qty = row["qty"] if row["status"] != "Sukses" else 0
-                
-                supabase.table("barang_retur").update({
-                    "kode": str(row["kode"]),
-                    "nama": str(row["nama"]),
-                    "qty": int(new_qty),
-                    "hpp": float(row["hpp"]),
-                    "total": float(new_total),
-                    "ket": str(row["ket"]),
-                    "ed": str(row["ed"]),
-                    "supplier": str(row["supplier"]),
-                    "status": str(row["status"])
-                }).eq("id", item_id).execute()
-                
-            st.success("Perubahan data berhasil disimpan!")
-            st.rerun()
-
-    with col_act2:
-        if st.button("🗑️ Hapus Data Retur Terpilih", use_container_width=True, type="secondary"):
-            if not selected_ids:
-                st.warning("Pilih data yang ingin dihapus terlebih dahulu.")
-            else:
-                for item_id in selected_ids:
-                    try:
-                        if pd.isna(item_id) or str(item_id).lower() == "none":
-                            continue
-                        valid_id = int(float(str(item_id)))
-                        supabase.table("barang_retur").delete().eq("id", valid_id).execute()
-                    except (ValueError, TypeError):
-                        continue
-                st.success("Data berhasil dihapus!")
-                st.rerun()
 else:
     st.info("Tidak ada data barang retur yang ditemukan di database atau sesuai filter. Silakan tambah data baru melalui menu di atas.")
 

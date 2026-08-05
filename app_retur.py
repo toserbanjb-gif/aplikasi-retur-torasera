@@ -123,7 +123,6 @@ DAFTAR_SUPPLIER = [
     "PADMATIRTA",
     "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG",
 ]
-
 DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 DAFTAR_STATUS_PESANAN = ["Pending", "Diproses", "Selesai", "Dibatalkan"]
 
@@ -881,35 +880,34 @@ elif menu == "🚫 Barang Diskontinu":
     st.dataframe(df_dis, use_container_width=True, hide_index=True)
 
     with st.expander("➕ Tambah Barang Diskontinu Baru"):
-        with st.form("form_diskontinu"):
-            d_kode = st.text_input("Kode Barang")
-            d_nama = st.text_input("Nama Barang")
-            d_kat = st.text_input("Kategori Barang")
-            d_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
-            d_alasan = st.text_area("Alasan Diskontinu", value="Penjualan lambat / ED berulang")
+        with st.form("form_tambah_diskontinu"):
+            dis_kode = st.text_input("Kode Barang")
+            dis_nama = st.text_input("Nama Barang")
+            dis_kat = st.text_input("Kategori Barang", value="General")
+            dis_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+            dis_alasan = st.text_input("Alasan Diskontinu", value="Kurang Laku / ED Berulang")
 
-            if st.form_submit_button("Simpan Data Diskontinu"):
+            if st.form_submit_button("Simpan Barang Diskontinu"):
                 tgl_dis = datetime.date.today().strftime("%Y-%m-%d")
                 supabase.table("barang_diskontinu").insert({
-                    "kode": d_kode,
-                    "nama": d_nama,
-                    "kategori": d_kat,
-                    "supplier": d_sup,
-                    "alasan": d_alasan,
+                    "kode": dis_kode,
+                    "nama": dis_nama,
+                    "kategori": dis_kat,
+                    "supplier": dis_sup,
+                    "alasan": dis_alasan,
                     "tgl_diskontinu": tgl_dis
                 }).execute()
-                st.success("Barang diskontinu berhasil ditambahkan!")
+                st.success("Barang diskontinu berhasil disimpan!")
                 st.rerun()
 
     if not df_dis.empty:
         st.subheader("🖨️ Cetak Surat Pemberitahuan Diskontinu")
-        sup_dis_cetak = st.selectbox("Pilih Supplier:", df_dis["supplier"].unique(), key="sup_dis_cetak")
+        sup_dis_cetak = st.selectbox("Pilih Supplier Diskontinu:", df_dis["supplier"].unique())
         df_dis_cetak = df_dis[df_dis["supplier"] == sup_dis_cetak]
-
-        pdf_dis = generate_pdf_diskontinu(df_dis_cetak, sup_dis_cetak)
+        pdf_dis_bytes = generate_pdf_diskontinu(df_dis_cetak, sup_dis_cetak)
         st.download_button(
             f"📄 Download Surat Diskontinu ({sup_dis_cetak})",
-            data=pdf_dis,
+            data=pdf_dis_bytes,
             file_name=f"Surat_Diskontinu_{sup_dis_cetak}.pdf",
             mime="application/pdf"
         )
@@ -919,48 +917,49 @@ elif menu == "🚫 Barang Diskontinu":
 # HALAMAN 5: PESANAN CUSTOMER
 # ==========================================
 elif menu == "🛒 Pesanan Customer":
-    st.title("🛒 Manajemen Pesanan Customer / Pre-Order")
+    st.title("🛒 Management Pesanan Customer / Pre-Order")
 
-    f_stat_p = st.selectbox("Filter Status Pesanan:", ["SEMUA STATUS"] + DAFTAR_STATUS_PESANAN)
-    f_cari_p = st.text_input("Cari Nama Customer / Barang / No HP:")
+    f_stat_pes = st.selectbox("Filter Status Pesanan:", ["SEMUA STATUS"] + DAFTAR_STATUS_PESANAN)
+    f_cari_pes = st.text_input("Cari Nama Customer / Barang / No HP:")
 
-    df_pesanan = ambil_data_pesanan(f_stat_p, f_cari_p)
-    st.dataframe(df_pesanan, use_container_width=True, hide_index=True)
+    df_pesan = ambil_data_pesanan(f_stat_pes, f_cari_pes)
+    st.dataframe(df_pesan, use_container_width=True, hide_index=True)
 
     with st.expander("➕ Tambah Pesanan Customer Baru"):
-        with st.form("form_pesanan"):
-            p_cust = st.text_input("Nama Customer")
-            p_hp = st.text_input("No HP / WhatsApp")
-            p_kode = st.text_input("Kode Barang")
-            p_nama = st.text_input("Nama Barang")
-            p_qty = st.number_input("Qty Pesanan", min_value=1, value=1)
-            p_harga = st.number_input("Harga Satuan (Rp)", min_value=0.0, value=0.0)
-            p_catatan = st.text_input("Catatan / Request Khusus")
+        with st.form("form_tambah_pesanan"):
+            pes_nama_cust = st.text_input("Nama Customer")
+            pes_hp = st.text_input("No HP / WhatsApp")
+            pes_kode = st.text_input("Kode Barang")
+            pes_nama_brg = st.text_input("Nama Barang")
+            pes_qty = st.number_input("Qty Pesanan", min_value=1, value=1)
+            pes_harga = st.number_input("Harga Satuan (Rp)", min_value=0.0, value=0.0)
+            pes_catatan = st.text_input("Catatan / Keterangan", value="-")
 
             if st.form_submit_button("Simpan Pesanan"):
-                p_total = p_qty * p_harga
-                tgl_p = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+                total_pesan = pes_qty * pes_harga
+                tgl_pesan = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
                 supabase.table("pesanan_customer").insert({
-                    "nama_customer": p_cust,
-                    "no_hp": p_hp,
-                    "kode_barang": p_kode,
-                    "nama_barang": p_nama,
-                    "qty": p_qty,
-                    "harga": p_harga,
-                    "total": p_total,
-                    "tgl_pesan": tgl_p,
+                    "nama_customer": pes_nama_cust,
+                    "no_hp": pes_hp,
+                    "kode_barang": pes_kode,
+                    "nama_barang": pes_nama_brg,
+                    "qty": pes_qty,
+                    "harga": pes_harga,
+                    "total": total_pesan,
+                    "tgl_pesan": tgl_pesan,
                     "status": "Pending",
-                    "catatan": p_catatan
+                    "catatan": pes_catatan
                 }).execute()
-                st.success("Pesanan customer berhasil dicatat!")
+                st.success("Pesanan customer berhasil ditambahkan!")
                 st.rerun()
 
-    if not df_pesanan.empty:
-        st.subheader("🖨️ Cetak Nota Pesanan")
-        pdf_p = generate_pdf_pesanan(df_pesanan)
+    if not df_pesan.empty:
+        st.subheader("🖨️ Cetak Nota Pesanan Customer")
+        pdf_pesan_bytes = generate_pdf_pesanan(df_pesan)
         st.download_button(
-            "📄 Download Nota Pesanan Customer (PDF)",
-            data=pdf_p,
+            "📄 Download Nota Pesanan (PDF)",
+            data=pdf_pesan_bytes,
             file_name="Nota_Pesanan_Customer.pdf",
             mime="application/pdf"
         )
+

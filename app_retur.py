@@ -580,13 +580,13 @@ if not df_retur.empty:
 
     st.divider()
 
-    col_act1, col_act2 = st.columns(2)
+   col_act1, col_act2 = st.columns(2)
     with col_act1:
         if st.button("💾 Update Detail Edit Manual", use_container_width=True):
             for _, row in edited_df.iterrows():
                 try:
                     raw_id = row["id"]
-                    if pd.isna(raw_id):
+                    if pd.isna(raw_id) or str(raw_id).lower() == "none":
                         continue
                     item_id = int(float(str(raw_id)))
                 except (ValueError, TypeError):
@@ -610,6 +610,21 @@ if not df_retur.empty:
             st.success("Perubahan data berhasil disimpan!")
             st.rerun()
 
+    with col_act2:
+        if st.button("🗑️ Hapus Data Retur Terpilih", use_container_width=True, type="secondary"):
+            if not selected_ids:
+                st.warning("Pilih data yang ingin dihapus terlebih dahulu.")
+            else:
+                for item_id in selected_ids:
+                    try:
+                        if pd.isna(item_id) or str(item_id).lower() == "none":
+                            continue
+                        valid_id = int(float(str(item_id)))
+                        supabase.table("barang_retur").delete().eq("id", valid_id).execute()
+                    except (ValueError, TypeError):
+                        continue
+                st.success("Data berhasil dihapus!")
+                st.rerun()
     with col_act2:
         if st.button("🗑️ Hapus Data Retur Terpilih", use_container_width=True, type="secondary"):
             if not selected_ids:
@@ -644,3 +659,4 @@ with col_pdf2:
         )
     else:
         st.button("📄 Download PDF Kosong", disabled=True, use_container_width=True)
+

@@ -3,6 +3,7 @@ from io import BytesIO
 import re
 import pandas as pd
 import streamlit as st
+import plotly.graph_objects as go
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -16,7 +17,7 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- MODERN CLEAN CSS ---
+# --- MODERN CLEAN CSS & ANIMASI KEDAP-KEDIP ---
 st.markdown("""
     <style>
     /* Background utama aplikasi agar lembut */
@@ -51,6 +52,16 @@ st.markdown("""
     
     .stButton button[kind="primary"]:hover {
         background-color: #1D4ED8;
+    }
+
+    /* Efek Kedap-Kedip (Blink) untuk Garis Grafik */
+    @keyframes kedapKedi {
+        0% { opacity: 1; }
+        50% { opacity: 0.2; }
+        100% { opacity: 1; }
+    }
+    .plotly .js-plotly-plot .traces path.js-line {
+        animation: kedapKedi 1.2s infinite ease-in-out;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -413,14 +424,44 @@ st.markdown("<p style='color: #64748B; margin-top: -10px;'>Kelola pencatatan dan
 
 df_semua = ambil_data_retur()
 
-# --- 1. GRAFIK TREN DI BAGIAN ATAS ---
+# --- 1. GRAFIK TREN DI BAGIAN ATAS (DINAMIS MERAH/HIJAU & KEDAP-KEDIP) ---
 st.markdown("### 📈 Grafik Tren Nilai Retur over Time")
 if not df_semua.empty and "tgl_input" in df_semua.columns:
-    # Mengelompokkan data berdasarkan tanggal input dan menjumlahkan total nominal retur
     df_chart = df_semua.groupby("tgl_input")["total"].sum().reset_index()
     df_chart = df_chart.sort_values("tgl_input")
-    df_chart = df_chart.set_index("tgl_input")
-    st.line_chart(df_chart, use_container_width=True)
+
+    # Menentukan warna berdasarkan arah tren keseluruhan (Awal vs Akhir)
+    if len(df_chart) > 1:
+        nilai_awal = df_chart["total"].iloc[0]
+        nilai_akhir = df_chart["total"].iloc[-1]
+        
+        # Jika nilai akhir > awal (Naik = Merah), jika tidak (Turun = Hijau)
+        if nilai_akhir > nilai_awal:
+            warna_garis = "#EF4444"  # Merah
+        else:
+            warna_garis = "#22C55E"  # Hijau
+    else:
+        warna_garis = "#22C55E"
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df_chart['tgl_input'],
+        y=df_chart['total'],
+        mode='lines+markers',
+        line=dict(color=warna_garis, width=4),
+        marker=dict(size=8),
+        hoovertemplate='Tanggal: %{x}<br>Total: Rp %{y:,.0f}<extra></extra>'
+    ))
+
+    fig.update_layout(
+        xaxis_title="Tanggal Input",
+        yaxis_title="Total (Rp)",
+        margin=dict(l=20, r=20, t=30, b=20),
+        height=380,
+        template="plotly_dark"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("Belum cukup data tanggal untuk menampilkan grafik tren.")
 

@@ -165,7 +165,6 @@ def cek_barang_duplikat(supplier, kode, nama):
     if df_existing.empty:
         return False
     
-    # Cek berdasarkan kesamaan Kode (jika kode tidak kosong/ '-') atau Nama Barang
     kw_nama = nama.strip().lower()
     kw_kode = kode.strip().lower() if kode else ""
     
@@ -375,7 +374,6 @@ def dialog_konfirmasi_setujui(id_list, status_baru):
 # --- TAMPILAN UTAMA HALAMAN RETUR BARANG ---
 st.title("📦 Retur Barang - Torasera Nurja Berkah")
 
-# Bagian 1: Analisis & Grafik Retur Overall
 df_semua = ambil_data_retur()
 if not df_semua.empty:
     st.markdown("### 📊 Analisis & Grafik Retur Overall")
@@ -393,7 +391,6 @@ if not df_semua.empty:
 
 st.divider()
 
-# Bagian 2: Tambah Barang Retur Baru (Form Satuan, Copy-Paste, & Upload CSV)
 with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", expanded=False):
     tab_form_satuan, tab_form_paste, tab_form_csv = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data", "📁 Upload File CSV"])
 
@@ -426,7 +423,6 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
                 if not f_in_nama.strip():
                     st.error("Nama barang tidak boleh kosong!")
                 else:
-                    # Pengecekan duplikat berdasarkan nama atau kode
                     is_duplicate = cek_barang_duplikat(f_in_sup, f_in_kode, f_in_nama)
                     if is_duplicate:
                         st.warning("⚠️ Peringatan: Barang dengan Nama atau Kode tersebut sudah terdaftar di database untuk supplier ini!")
@@ -509,7 +505,6 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan, Copy-Paste, & CSV)", exp
 
 st.divider()
 
-# Bagian 3: Filter Tabel Retur
 f_col1, f_col2, f_col3 = st.columns(3)
 with f_col1:
     filter_sup = st.selectbox("Filter Supplier", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_retur")
@@ -581,8 +576,17 @@ if not df_retur.empty:
     with col_act1:
         if st.button("💾 Update Detail Edit Manual", use_container_width=True):
             for _, row in edited_df.iterrows():
+                try:
+                    raw_id = row["id"]
+                    if pd.isna(raw_id):
+                        continue
+                    item_id = int(float(str(raw_id)))
+                except (ValueError, TypeError):
+                    continue
+
                 new_total = row["qty"] * row["hpp"] if row["status"] != "Sukses" else 0
                 new_qty = row["qty"] if row["status"] != "Sukses" else 0
+                
                 supabase.table("barang_retur").update({
                     "kode": str(row["kode"]),
                     "nama": str(row["nama"]),
@@ -593,7 +597,8 @@ if not df_retur.empty:
                     "ed": str(row["ed"]),
                     "supplier": str(row["supplier"]),
                     "status": str(row["status"])
-                }).eq("id", int(row["id"])).execute()
+                }).eq("id", item_id).execute()
+                
             st.success("Perubahan data berhasil disimpan!")
             st.rerun()
 
@@ -611,7 +616,6 @@ else:
 
 st.divider()
 
-# Bagian 5: Cetak Nota Retur (PDF)
 st.markdown("### 🖨️ Cetak Nota Retur (PDF)")
 col_pdf1, col_pdf2 = st.columns([3, 1])
 with col_pdf1:

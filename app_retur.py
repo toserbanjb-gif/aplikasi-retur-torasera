@@ -16,43 +16,46 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- CUSTOM CSS MODERN STYLE ---
+# --- MODERN CLEAN CSS ---
 st.markdown("""
     <style>
-    /* Mengubah background utama */
+    /* Background utama aplikasi agar lembut */
     .stApp {
-        background-color: #F4F6F9;
+        background-color: #F8FAFC;
     }
     
-    /* Styling Card / Container */
-    div.stMetric, div[data-testid="stExpander"], div.element-container {
-        background-color: #FFFFFF;
-        border-radius: 10px;
-    }
-    
-    /* Perbaikan tampilan sidebar agar mirip dashboard modern */
+    /* Styling Sidebar agar elegan bernuansa gelap profesional */
     [data-testid="stSidebar"] {
-        background-color: #1E293B;
-        color: #FFFFFF;
-    }
-    [data-testid="stSidebar"] .stButton button {
-        background-color: #2563EB;
-        color: white;
-        border-radius: 6px;
-        border: none;
+        background-color: #0F172A;
+        padding-top: 1rem;
     }
     
-    /* Judul Header */
-    h1, h2, h3 {
+    [data-testid="stSidebar"] span, [data-testid="stSidebar"] p, [data-testid="stSidebar"] div {
+        color: #E2E8F0 !important;
+    }
+
+    /* Perbaikan styling card / kontainer agar ada efek bayangan lembut (shadow) */
+    div.element-container, div[data-testid="stExpander"] {
         color: #1E293B;
-        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+    }
+
+    /* Kustomisasi Judul Header agar tegas & rapi */
+    h1, h2, h3 {
+        color: #0F172A;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     }
     
     /* Tombol Utama */
     .stButton button[kind="primary"] {
         background-color: #2563EB;
         color: white;
-        border-radius: 6px;
+        border-radius: 8px;
+        font-weight: 600;
+        border: none;
+    }
+    
+    .stButton button[kind="primary"]:hover {
+        background-color: #1D4ED8;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -393,48 +396,47 @@ def dialog_edit_barang(item_id):
             st.success("Data berhasil diperbarui!")
             st.rerun()
 
-# --- SIDEBAR MENU MODERN ---
+# --- SIDEBAR NAVIGASI BERSIH ---
 with st.sidebar:
-    st.markdown("### 🛒 **TOSERBA**")
-    st.markdown("<p style='color: #94A3B8; font-size: 12px;'>NURJA BERKAH<br>Belanja Lengkap, Keluarga Bahagia</p>", unsafe_allow_html=True)
+    st.markdown("### 🛒 TOSERBA")
+    st.markdown("<p style='color: #94A3B8; font-size: 12px; margin-top: -5px;'>NURJA BERKAH<br>Belanja Lengkap, Keluarga Bahagia</p>", unsafe_allow_html=True)
     st.divider()
     
     menu_pilihan = st.radio(
-        "Navigasi Utama",
-        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"],
-        label_visibility="collapsed"
+        "Menu Utama",
+        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"]
     )
     
     st.divider()
     st.markdown("👤 **Admin Gudang**")
     if st.button("🚪 Keluar Sistem", use_container_width=True):
-        st.info("Sistem terkunci / Logout.")
+        st.info("Sistem terkunci.")
 
-# --- KONTEN HALAMAN UTAMA ---
-st.markdown("### 📋 Input Retur Barang")
-st.markdown("<p style='color: #64748B;'>Input dan kelola data retur barang dari supplier secara terstruktur.</p>", unsafe_allow_html=True)
+# --- KONTEN UTAMA DASHBOARD ---
+st.markdown("## 📦 Input Retur Barang")
+st.markdown("<p style='color: #64748B; margin-top: -10px;'>Kelola pencatatan dan monitoring retur barang dari supplier secara real-time.</p>", unsafe_allow_html=True)
 
-# Ambil data keseluruhan untuk metrik
 df_semua = ambil_data_retur()
 
-# --- KARTU STATISTIK ATAS (METRICS) ---
-m1, m2, m3, m4, m5 = st.columns(5)
+# --- STATISTIK KARTU METRIK BERSIH DI ATAS ---
+col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 total_retur_count = len(df_semua)
 total_supplier_count = df_semua["supplier"].nunique() if not df_semua.empty else 0
 total_pending = len(df_semua[df_semua["status"] == "Pengajuan"]) if not df_semua.empty else 0
 total_sukses = len(df_semua[df_semua["status"] == "Sukses"]) if not df_semua.empty else 0
+grand_total_all = df_semua['total'].sum() if not df_semua.empty else 0
 
-m1.metric("Total Retur", f"{total_retur_count} Item")
-m2.metric("Total Supplier", f"{total_supplier_count}")
-m3.metric("Menunggu Approval", f"{total_pending}")
-m4.metric("Sudah Diretur (Sukses)", f"{total_sukses}")
-m5.metric("Total Nilai", f"Rp {df_semua['total'].sum():,.0f}" if not df_semua.empty else "Rp 0")
+col_m1.metric("Total Retur", f"{total_retur_count} Item")
+col_m2.metric("Supplier", f"{total_supplier_count}")
+col_m3.metric("Menunggu", f"{total_pending}")
+col_m4.metric("Sukses", f"{total_sukses}")
+col_m5.metric("Total Nilai", f"Rp {grand_total_all:,.0f}")
 
 st.divider()
 
-# --- FORM INPUT & TABEL ---
-with st.expander("➕ Tambah Barang Retur Baru (Satuan / Massal)", expanded=True):
-    tab_satuan, tab_paste = st.tabs(["📝 Form Input Satuan", "📋 Copy-Paste Massal"])
+# --- FORM INPUT & PENCATATAN ---
+with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded=True):
+    tab_satuan, tab_paste = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data"])
 
     with tab_satuan:
         with st.form("form_tambah_retur", clear_on_submit=True):
@@ -456,7 +458,7 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan / Massal)", expanded=True
             with c5:
                 f_in_ket = st.selectbox("Keterangan", ["Rusak", "ED", "Salah PO", "Lainnya"])
             with c6:
-                f_in_ed = st.text_input("ED (Tanggal/Bulan/Tahun atau -)", value="-")
+                f_in_ed = st.text_input("ED (Tanggal / -)", value="-")
             with c7:
                 f_in_status = st.selectbox("Status", DAFTAR_STATUS, index=0)
 
@@ -498,7 +500,7 @@ with st.expander("➕ Tambah Barang Retur Baru (Satuan / Massal)", expanded=True
 
 st.divider()
 
-# --- FILTER & PENCARIAN TABEL ---
+# --- FILTER DAN PENCARIAN ---
 f_col1, f_col2, f_col3 = st.columns(3)
 with f_col1:
     filter_sup = st.selectbox("Filter Supplier", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_retur")
@@ -537,7 +539,7 @@ if not df_retur.empty:
     st.markdown(f"#### **Grand Total: Rp {grand_total:,.0f}**")
     st.divider()
 
-    # --- AKSI PENGELOLAAN DATA ---
+    # --- KONTROL AKSI ---
     st.markdown("### 🛠️ Pengelolaan Data Terpilih")
     list_all_ids = df_retur["id"].tolist()
     selected_ids = st.multiselect("Pilih ID Barang Retur (untuk Aksi Edit / Ubah Status / Hapus):", options=list_all_ids)

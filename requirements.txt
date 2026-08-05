@@ -4,3 +4,4 @@ pandas
 supabase
 watchdog
 reportlab
+plotly

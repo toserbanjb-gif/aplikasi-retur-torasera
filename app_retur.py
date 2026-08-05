@@ -9,6 +9,9 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from supabase import Client, create_client
+import os
+import streamlit as st
+from supabase import Client, create_client
 
 # --- CONFIG PAGE ---
 st.set_page_config(

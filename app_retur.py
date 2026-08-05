@@ -20,7 +20,7 @@ st.set_page_config(
 DB_NAME = "retur_barang.db"
 
 DAFTAR_SUPPLIER = [
-    "Belum Tau"
+    "Belum Tau",
     "PT ARTABOGA (Hanif)",
     "PT. PANGAN LESTARI (Ratna)",
     "SINAR SURYA SUKSES (Adhit)",

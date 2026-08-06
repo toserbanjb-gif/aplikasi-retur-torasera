@@ -171,6 +171,7 @@ DAFTAR_SUPPLIER = [
     "Jaya Subur",
     "PADMATIRTA",
     "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG",
+    "MARGA NUSARAYA",
 ]
 DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 

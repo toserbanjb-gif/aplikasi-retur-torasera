@@ -207,6 +207,7 @@ DAFTAR_SUPPLIER = [
     "EGIZ UMKM (Ibu Riz)",
     "UD Mentari Jaya Putra",
     "AIRA",
+    "CV Jaya Subur",
     "PT KIAN RAGAM DISTRIBUTOR",
     "OPIK PUTRA SNACK",
     "PT PRAKARSA JAYA SENTOSA",

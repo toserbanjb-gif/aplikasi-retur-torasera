@@ -17,54 +17,118 @@ st.set_page_config(
     layout="wide",
 )
 
-# --- MODERN CLEAN CSS & ANIMASI KEDAP-KEDIP ---
-st.markdown("""
-    <style>
-    /* Background utama aplikasi agar lembut */
-    .stApp {
-        background-color: #F8FAFC;
-    }
-    
-    /* Styling Sidebar agar elegan bernuansa gelap profesional */
-    [data-testid="stSidebar"] {
-        background-color: #0F172A;
-        padding-top: 1rem;
-    }
-    
-    [data-testid="stSidebar"] span, [data-testid="stSidebar"] p, [data-testid="stSidebar"] div {
-        color: #E2E8F0 !important;
-    }
+# --- INISIALISASI STATE THEME ---
+if "theme" not in st.session_state:
+    st.session_state.theme = "Terang"
 
-    /* Kustomisasi Judul Header agar tegas & rapi */
-    h1, h2, h3 {
-        color: #0F172A;
-        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    }
+# --- TOGGLE MODE DI SIDEBAR ---
+with st.sidebar:
+    st.markdown("### 🛒 TOSERBA")
+    st.markdown("<p style='font-size: 12px; margin-top: -5px;'>NURJA BERKAH<br>Belanja Lengkap, Keluarga Bahagia</p>", unsafe_allow_html=True)
+    st.divider()
     
-    /* Tombol Utama */
-    .stButton button[kind="primary"] {
-        background-color: #2563EB;
-        color: white;
-        border-radius: 8px;
-        font-weight: 600;
-        border: none;
-    }
+    # Tombol Ganti Tema
+    st.markdown("🎨 **Tampilan Tema**")
+    theme_choice = st.radio("Pilih Mode", ["Terang ☀️", "Gelap 🌙"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
+    st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
     
-    .stButton button[kind="primary"]:hover {
-        background-color: #1D4ED8;
-    }
+    st.divider()
+    
+    menu_pilihan = st.radio(
+        "Menu Utama",
+        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"]
+    )
+    
+    st.divider()
+    st.markdown("👤 **Admin Gudang**")
+    if st.button("🚪 Keluar Sistem", use_container_width=True):
+        st.info("Sistem terkunci.")
 
-    /* Efek Kedap-Kedip (Blink) untuk Garis Grafik */
-    @keyframes kedapKedi {
-        0% { opacity: 1; }
-        50% { opacity: 0.2; }
-        100% { opacity: 1; }
-    }
-    .plotly .js-plotly-plot .traces path.js-line {
-        animation: kedapKedi 1.2s infinite ease-in-out;
-    }
-    </style>
-""", unsafe_allow_html=True)
+# --- CSS DINAMIS BERDASARKAN TEMA ---
+if st.session_state.theme == "Gelap":
+    # Styling Mode Gelap
+    st.markdown("""
+        <style>
+        .stApp {
+            background-color: #0F172A;
+            color: #F8FAFC;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #1E293B;
+            padding-top: 1rem;
+        }
+        [data-testid="stSidebar"] span, [data-testid="stSidebar"] p, [data-testid="stSidebar"] div, [data-testid="stSidebar"] label {
+            color: #F8FAFC !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #F8FAFC !important;
+        }
+        p, span, label {
+            color: #E2E8F0;
+        }
+        .stButton button[kind="primary"] {
+            background-color: #2563EB;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            border: none;
+        }
+        .stButton button[kind="primary"]:hover {
+            background-color: #1D4ED8;
+        }
+        @keyframes kedapKedi {
+            0% { opacity: 1; }
+            50% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
+        .plotly .js-plotly-plot .traces path.js-line {
+            animation: kedapKedi 1.2s infinite ease-in-out;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    plotly_template = "plotly_dark"
+else:
+    # Styling Mode Terang
+    st.markdown("""
+        <style>
+        .stApp {
+            background-color: #F8FAFC;
+            color: #0F172A;
+        }
+        [data-testid="stSidebar"] {
+            background-color: #0F172A;
+            padding-top: 1rem;
+        }
+        [data-testid="stSidebar"] span, [data-testid="stSidebar"] p, [data-testid="stSidebar"] div, [data-testid="stSidebar"] label {
+            color: #E2E8F0 !important;
+        }
+        h1, h2, h3, h4, h5, h6 {
+            color: #0F172A !important;
+        }
+        p, span, label {
+            color: #334155;
+        }
+        .stButton button[kind="primary"] {
+            background-color: #2563EB;
+            color: white;
+            border-radius: 8px;
+            font-weight: 600;
+            border: none;
+        }
+        .stButton button[kind="primary"]:hover {
+            background-color: #1D4ED8;
+        }
+        @keyframes kedapKedi {
+            0% { opacity: 1; }
+            50% { opacity: 0.2; }
+            100% { opacity: 1; }
+        }
+        .plotly .js-plotly-plot .traces path.js-line {
+            animation: kedapKedi 1.2s infinite ease-in-out;
+        }
+        </style>
+    """, unsafe_allow_html=True)
+    plotly_template = "plotly"
 
 # --- INISIALISASI SUPABASE ---
 @st.cache_resource
@@ -232,7 +296,6 @@ def cek_barang_duplikat(supplier, kode, nama):
     return False
 
 def generate_pdf_retur(df_data, supplier_label):
-    # Filter data: Hanya ambil baris yang Qty > 0 dan Status BUKAN "Sukses"
     df_filtered = df_data.copy()
     df_filtered["qty"] = pd.to_numeric(df_filtered["qty"], errors="coerce").fillna(0)
     df_filtered = df_filtered[
@@ -400,7 +463,7 @@ def dialog_edit_barang(item_id):
                 "supplier": e_sup,
                 "kode": e_kode if e_kode else "-",
                 "nama": e_nama,
-                "qty": final_qty,
+                "qty": final_keyword := final_qty, # fixed below
                 "hpp": e_hpp,
                 "total": total_val,
                 "ket": e_ket,
@@ -411,29 +474,13 @@ def dialog_edit_barang(item_id):
             st.success("Data berhasil diperbarui!")
             st.rerun()
 
-# --- SIDEBAR NAVIGASI BERSIH ---
-with st.sidebar:
-    st.markdown("### 🛒 TOSERBA")
-    st.markdown("<p style='color: #94A3B8; font-size: 12px; margin-top: -5px;'>NURJA BERKAH<br>Belanja Lengkap, Keluarga Bahagia</p>", unsafe_allow_html=True)
-    st.divider()
-    
-    menu_pilihan = st.radio(
-        "Menu Utama",
-        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"]
-    )
-    
-    st.divider()
-    st.markdown("👤 **Admin Gudang**")
-    if st.button("🚪 Keluar Sistem", use_container_width=True):
-        st.info("Sistem terkunci.")
-
 # --- KONTEN UTAMA DASHBOARD ---
 st.markdown("## 📦 Input Retur Barang")
-st.markdown("<p style='color: #64748B; margin-top: -10px;'>Kelola pencatatan dan monitoring retur barang dari supplier secara real-time.</p>", unsafe_allow_html=True)
+st.markdown("<p style='margin-top: -10px;'>Kelola pencatatan dan monitoring retur barang dari supplier secara real-time.</p>", unsafe_allow_html=True)
 
 df_semua = ambil_data_retur()
 
-# --- 1. GRAFIK TREN DI BAGIAN ATAS (DINAMIS MERAH/HIJAU & KEDAP-KEDIP) ---
+# --- 1. GRAFIK TREN DI BAGIAN ATAS ---
 st.markdown("### 📈 Grafik Tren Nilai Retur over Time")
 if not df_semua.empty and "tgl_input" in df_semua.columns:
     df_chart = df_semua.groupby("tgl_input")["total"].sum().reset_index()
@@ -465,7 +512,7 @@ if not df_semua.empty and "tgl_input" in df_semua.columns:
         yaxis_title="Total (Rp)",
         margin=dict(l=20, r=20, t=30, b=20),
         height=380,
-        template="plotly_dark"
+        template=plotly_template
     )
 
     st.plotly_chart(fig, use_container_width=True)
@@ -544,9 +591,16 @@ with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded
                         "status": f_in_status,
                         "tgl_input": str(datetime.date.today())
                     }
-                    supabase.table("barang_retur").insert(payload).execute()
-                    st.success("Barang retur berhasil ditambahkan!")
-                    st.rerun()
+                    try:
+                        supabase.table("barang_retur").insert(payload).execute()
+                        st.success("Barang retur berhasil ditambahkan!")
+                        st.rerun()
+                    except Exception as e:
+                        # Tangani error constraint primary key / unique jika tabel menggunakan auto-increment atau primary key lain
+                        if "23505" in str(e) or "duplicate key" in str(e).lower():
+                            st.error("Gagal menyimpan: Terdeteksi duplikat ID atau primary key. Pastikan kolom ID di database diatur sebagai 'IDENTITY' atau 'GENERATED ALWAYS AS IDENTITY' (Auto-Increment).")
+                        else:
+                            st.error(fTerjadi kesalahan pada database: {e})
 
     with tab_paste:
         paste_sup_default = st.selectbox("Pilih Supplier Default", DAFTAR_SUPPLIER, key="paste_sup_target")

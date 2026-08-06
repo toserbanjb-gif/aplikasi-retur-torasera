@@ -463,7 +463,7 @@ def dialog_edit_barang(item_id):
                 "supplier": e_sup,
                 "kode": e_kode if e_kode else "-",
                 "nama": e_nama,
-                "qty": final_keyword := final_qty, # fixed below
+                "qty": final_qty,
                 "hpp": e_hpp,
                 "total": total_val,
                 "ket": e_ket,
@@ -596,11 +596,10 @@ with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded
                         st.success("Barang retur berhasil ditambahkan!")
                         st.rerun()
                     except Exception as e:
-                        # Tangani error constraint primary key / unique jika tabel menggunakan auto-increment atau primary key lain
                         if "23505" in str(e) or "duplicate key" in str(e).lower():
                             st.error("Gagal menyimpan: Terdeteksi duplikat ID atau primary key. Pastikan kolom ID di database diatur sebagai 'IDENTITY' atau 'GENERATED ALWAYS AS IDENTITY' (Auto-Increment).")
                         else:
-                            st.error(fTerjadi kesalahan pada database: {e})
+                            st.error(f"Terjadi kesalahan pada database: {e}")
 
     with tab_paste:
         paste_sup_default = st.selectbox("Pilih Supplier Default", DAFTAR_SUPPLIER, key="paste_sup_target")
@@ -744,7 +743,7 @@ st.divider()
 st.markdown("### 🖨️ Cetak Nota Retur (PDF)")
 col_pdf1, col_pdf2 = st.columns([3, 1])
 with col_pdf1:
-    pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
+    pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUS SUPPLIER" if "SEMUA SUPPLIER" not in DAFTAR_SUPPLIER else "SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
 with col_pdf2:
     st.markdown("<br>", unsafe_allow_html=True)
     df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target) if pdf_supplier_target != "SEMUA SUPPLIER" else df_semua

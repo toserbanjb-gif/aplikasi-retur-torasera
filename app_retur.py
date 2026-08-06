@@ -232,6 +232,14 @@ def cek_barang_duplikat(supplier, kode, nama):
     return False
 
 def generate_pdf_retur(df_data, supplier_label):
+    # Filter data: Hanya ambil baris yang Qty > 0 dan Status BUKAN "Sukses"
+    df_filtered = df_data.copy()
+    df_filtered["qty"] = pd.to_numeric(df_filtered["qty"], errors="coerce").fillna(0)
+    df_filtered = df_filtered[
+        (df_filtered["qty"] > 0) & 
+        (df_filtered["status"].astype(str).str.strip().str.lower() != "sukses")
+    ]
+
     buffer = BytesIO()
     doc = SimpleDocTemplate(
         buffer,
@@ -273,7 +281,7 @@ def generate_pdf_retur(df_data, supplier_label):
     ]]
 
     grand_total = 0
-    for _, r in df_data.iterrows():
+    for _, r in df_filtered.iterrows():
         data_tabel.append([
             Paragraph(str(r["kode"]), cell_center),
             Paragraph(str(r["nama"]), cell_style),
@@ -431,12 +439,10 @@ if not df_semua.empty and "tgl_input" in df_semua.columns:
     df_chart = df_semua.groupby("tgl_input")["total"].sum().reset_index()
     df_chart = df_chart.sort_values("tgl_input")
 
-    # Menentukan warna berdasarkan arah tren keseluruhan (Awal vs Akhir)
     if len(df_chart) > 1:
         nilai_awal = df_chart["total"].iloc[0]
         nilai_akhir = df_chart["total"].iloc[-1]
         
-        # Jika nilai akhir > awal (Naik = Merah), jika tidak (Turun = Hijau)
         if nilai_akhir > nilai_awal:
             warna_garis = "#EF4444"  # Merah
         else:

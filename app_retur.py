@@ -148,6 +148,7 @@ DAFTAR_SUPPLIER = [
     "PT Eka Artha Buana Darmawan (Unilever)",
     "PT Eka Artha Buana Darmawan (Nestle)",
     "TRI USAHA JAYA",
+    "PT.TUMBAKMAS NIAGA (Hasan)",
     "PT BAHAGIA INTRA NIAGA (Onky)",
     "PT Pinus Merah Abadi (Bayuhan)",
     "PT JAPFA FOOD INDONESIA (Uwais)",

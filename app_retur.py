@@ -46,7 +46,6 @@ with st.sidebar:
 
 # --- CSS DINAMIS BERDASARKAN TEMA ---
 if st.session_state.theme == "Gelap":
-    # Styling Mode Gelap
     st.markdown("""
         <style>
         .stApp {
@@ -88,7 +87,6 @@ if st.session_state.theme == "Gelap":
     """, unsafe_allow_html=True)
     plotly_template = "plotly_dark"
 else:
-    # Styling Mode Terang
     st.markdown("""
         <style>
         .stApp {
@@ -579,6 +577,7 @@ with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded
                     final_qty = 0 if is_sukses else f_in_qty
                     total_val = 0 if is_sukses else (f_in_qty * f_in_hpp)
 
+                    # Payload TANPA kolom id agar diserahkan penuh ke Identity Supabase
                     payload = {
                         "supplier": f_in_sup,
                         "kode": f_in_kode if f_in_kode else "-",
@@ -596,10 +595,7 @@ with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded
                         st.success("Barang retur berhasil ditambahkan!")
                         st.rerun()
                     except Exception as e:
-                        if "23505" in str(e) or "duplicate key" in str(e).lower():
-                            st.error("Gagal menyimpan: Terdeteksi duplikat ID atau primary key. Pastikan kolom ID di database diatur sebagai 'IDENTITY' atau 'GENERATED ALWAYS AS IDENTITY' (Auto-Increment).")
-                        else:
-                            st.error(f"Terjadi kesalahan pada database: {e}")
+                        st.error(f"Terjadi kesalahan pada database: {e}")
 
     with tab_paste:
         paste_sup_default = st.selectbox("Pilih Supplier Default", DAFTAR_SUPPLIER, key="paste_sup_target")
@@ -743,7 +739,7 @@ st.divider()
 st.markdown("### 🖨️ Cetak Nota Retur (PDF)")
 col_pdf1, col_pdf2 = st.columns([3, 1])
 with col_pdf1:
-    pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUS SUPPLIER" if "SEMUA SUPPLIER" not in DAFTAR_SUPPLIER else "SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
+    pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
 with col_pdf2:
     st.markdown("<br>", unsafe_allow_html=True)
     df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target) if pdf_supplier_target != "SEMUA SUPPLIER" else df_semua

@@ -42,7 +42,6 @@ def ambil_data_supplier(cari=""):
         if "id" not in df.columns:
             df["id"] = range(1, len(df) + 1)
             
-        # Konversi tipe data agar aman di st.data_editor
         df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
         df["no_urut"] = pd.to_numeric(df["no_urut"], errors="coerce").fillna(1).astype(int)
         df["tagihan"] = pd.to_numeric(df["tagihan"], errors="coerce").fillna(0.0).astype(float)
@@ -50,7 +49,6 @@ def ambil_data_supplier(cari=""):
         df["jenis_pajak"] = df["jenis_pajak"].astype(str)
         df["sistem_bayar"] = df["sistem_bayar"].astype(str)
         
-        # Konversi kolom jatuh_tempo ke datetime.date
         if "jatuh_tempo" in df.columns:
             df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
         else:
@@ -101,7 +99,6 @@ def generate_pdf_supplier(df_export, jenis_filter):
     elements.append(Paragraph(f"Laporan Data Supplier ({jenis_filter}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
-    # Header Tabel PDF
     table_data = [[
         Paragraph("<b>No</b>", style_cell_bold),
         Paragraph("<b>Nama Supplier</b>", style_cell_bold),
@@ -124,7 +121,6 @@ def generate_pdf_supplier(df_export, jenis_filter):
             Paragraph(str(row['jatuh_tempo']), style_cell)
         ])
 
-    # Baris Total
     table_data.append([
         Paragraph("<b>TOTAL</b>", style_cell_bold),
         Paragraph("", style_cell),
@@ -147,7 +143,6 @@ def generate_pdf_supplier(df_export, jenis_filter):
         ('LINEABOVE', (0,-1), (-1,-1), 1, colors.HexColor('#0F172A')),
     ]))
     
-    # Ubah warna teks header tabel di PDF jadi putih
     for i in range(len(col_widths)):
         table_data[0][i].style.textColor = colors.whitesmoke
 
@@ -156,7 +151,6 @@ def generate_pdf_supplier(df_export, jenis_filter):
     buffer.seek(0)
     return buffer.getvalue()
 
-# Import reportlab module checks for A4
 import reportlab.lib.pagesizes
 
 # --- TOGGLE MODE DI SIDEBAR ---
@@ -290,9 +284,63 @@ with head_c2:
 st.divider()
 
 # ==========================================
+# MENU 2: INPUT RETUR
+# ==========================================
+if menu_pilihan == "📦 Input Retur":
+    st.markdown("## 📦 Input Barang Retur")
+    st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan barang retur baru ke database sistem.</p>", unsafe_allow_html=True)
+    
+    with st.form("form_input_retur", clear_on_submit=True):
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            f_kode = st.text_input("Kode Barcode / SKU")
+            f_nama = st.text_input("Nama Barang")
+            f_qty = st.number_input("Quantity (Qty)", min_value=1, value=1)
+        with fc2:
+            f_hpp = st.number_input("Harga HPP (Rp)", min_value=0.0, value=0.0, step=100.0)
+            f_ket = st.selectbox("Keterangan Retur", ["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"])
+            f_ed = st.text_input("Tanggal ED (jika ada, misal: 31-12-2026 atau -)")
+        with fc3:
+            f_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+            f_status = st.selectbox("Status Retur", ["Pengajuan", "Sedang Diverifikasi", "Selesai"])
+            f_tgl = st.date_input("Tanggal Input", value=datetime.date.today())
+        
+        submit_retur = st.form_submit_button("💾 Simpan Data Retur", type="primary")
+        if submit_retur:
+            if not f_nama:
+                st.warning("Nama barang tidak boleh kosong!")
+            else:
+                try:
+                    total_val = float(f_qty) * float(f_hpp)
+                    payload_retur = {
+                        "kode": str(f_kode),
+                        "nama": str(f_nama),
+                        "qty": int(f_qty),
+                        "hpp": float(f_hpp),
+                        "total": float(total_val),
+                        "ket": str(f_ket),
+                        "ed": str(f_ed),
+                        "supplier": str(f_supplier),
+                        "status": str(f_status),
+                        "tgl_input": str(f_tgl)
+                    }
+                    supabase.table("barang_retur").insert(payload_retur).execute()
+                    st.success("Data barang retur berhasil disimpan!")
+                except Exception as e:
+                    st.error(f"Gagal menyimpan data retur: {e}")
+
+    st.divider()
+    st.markdown("### 📋 Riwayat Retur Terbaru")
+    df_history = ambil_data_retur()
+    if not df_history.empty:
+        st.dataframe(df_history.tail(10), use_container_width=True, hide_index=True)
+    else:
+        st.info("Belum ada data retur.")
+
+# ==========================================
 # MENU 4: DATA SUPPLIER
 # ==========================================
-if menu_pilihan == "🏢 Data Supplier":
+elif menu_pilihan == "🏢 Data Supplier":
     st.markdown("## 🏢 Manajemen Data Supplier")
     st.markdown("<p style='margin-top: -10px;'>Kelola informasi supplier, nomor urut, nominal tagihan, status PKP/Non-PKP, sistem pembayaran, serta tanggal jatuh tempo.</p>", unsafe_allow_html=True)
     
@@ -327,7 +375,6 @@ if menu_pilihan == "🏢 Data Supplier":
 
     st.divider()
     
-    # Bagian Pencarian & Opsi Ekspor PDF
     ex_c1, ex_c2 = st.columns([2, 1])
     with ex_c1:
         cari_sup = st.text_input("🔍 Cari Supplier (Nama / Pajak / Sistem Bayar)")
@@ -338,7 +385,6 @@ if menu_pilihan == "🏢 Data Supplier":
     df_supplier_view = ambil_data_supplier(cari_sup)
 
     if not df_supplier_view.empty:
-        # Tombol Download PDF
         if pilihan_filter_pdf == "PKP":
             df_pdf = df_supplier_view[df_supplier_view["jenis_pajak"].str.upper() == "PKP"]
         elif pilihan_filter_pdf == "Non-PKP":
@@ -422,7 +468,7 @@ if menu_pilihan == "🏢 Data Supplier":
         st.info("Belum ada data supplier yang tersimpan.")
 
 # ==========================================
-# MENU LAINNYA (HOME, INPUT RETUR, LIST RETUR, LAPORAN, PENGATURAN)
+# MENU LAINNYA (HOME, LIST RETUR, LAPORAN, PENGATURAN)
 # ==========================================
 elif menu_pilihan == "🏠 Home":
     st.markdown("## 🏠 Halaman Utama Dashboard")
@@ -434,9 +480,8 @@ elif menu_pilihan == "🏠 Home":
     col_h2.metric("Total Supplier Terdaftar", f"{len(df_sup_notif)} Supplier")
     col_h3.metric("Total Nilai Retur", f"Rp {df_home['total'].sum() if not df_home.empty else 0:,.0f}")
 
-elif menu_pilihan in ["📦 Input Retur", "📋 List Retur"]:
-    st.markdown(f"## {menu_pilihan}")
-    st.info("Menu retur barang aktif dan terintegrasi dengan database utama.")
+elif menu_pilihan == "📋 List Retur":
+    st.markdown("## 📋 List Data Retur")
     df_retur_all = ambil_data_retur()
     st.dataframe(df_retur_all, use_container_width=True)
 

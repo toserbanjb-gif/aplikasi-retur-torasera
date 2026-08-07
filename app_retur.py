@@ -38,14 +38,30 @@ def ambil_data_supplier(cari=""):
             return pd.DataFrame(columns=["id", "no_urut", "nama_supplier", "tagihan", "jenis_pajak", "sistem_bayar", "jatuh_tempo"])
         df = pd.DataFrame(response.data)
         df.columns = [str(c).lower() for c in df.columns]
+        
         if "id" not in df.columns:
             df["id"] = range(1, len(df) + 1)
+            
+        # Konversi tipe data agar aman di st.data_editor
+        df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
+        df["no_urut"] = pd.to_numeric(df["no_urut"], errors="coerce").fillna(1).astype(int)
+        df["tagihan"] = pd.to_numeric(df["tagihan"], errors="coerce").fillna(0.0).astype(float)
+        df["nama_supplier"] = df["nama_supplier"].astype(str)
+        df["jenis_pajak"] = df["jenis_pajak"].astype(str)
+        df["sistem_bayar"] = df["sistem_bayar"].astype(str)
+        
+        # Konversi kolom jatuh_tempo ke datetime.date
+        if "jatuh_tempo" in df.columns:
+            df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
+        else:
+            df["jatuh_tempo"] = datetime.date.today()
+
         if cari:
             kw = cari.lower()
             df = df[
-                df["nama_supplier"].astype(str).str.lower().str.contains(kw) |
-                df["jenis_pajak"].astype(str).str.lower().str.contains(kw) |
-                df["sistem_bayar"].astype(str).str.lower().str.contains(kw)
+                df["nama_supplier"].str.lower().str.contains(kw) |
+                df["jenis_pajak"].str.lower().str.contains(kw) |
+                df["sistem_bayar"].str.lower().str.contains(kw)
             ]
         return df
     except Exception:
@@ -58,16 +74,16 @@ hari_ini = datetime.date.today()
 
 if not df_sup_notif.empty and "jatuh_tempo" in df_sup_notif.columns:
     for _, row in df_sup_notif.iterrows():
-        tgl_jt_str = str(row.get("jatuh_tempo", ""))
-        try:
-            tgl_jt = datetime.datetime.strptime(tgl_jt_str, "%Y-%m-%d").date()
-            selisih = (tgl_jt - hari_ini).days
-            if selisih < 0:
-                notif_jatuh_tempo.append(f"🔴 **{row['nama_supplier']}** sudah **JATUH TEMPO** sejak {abs(selisih)} hari lalu!")
-            elif selisih <= 3:
-                notif_jatuh_tempo.append(f"🟡 **{row['nama_supplier']}** jatuh tempo dalam **{selisih} hari** ({tgl_jt_str}).")
-        except ValueError:
-            pass
+        tgl_jt = row.get("jatuh_tempo")
+        if isinstance(tgl_jt, datetime.date):
+            try:
+                selisih = (tgl_jt - hari_ini).days
+                if selisih < 0:
+                    notif_jatuh_tempo.append(f"🔴 **{row['nama_supplier']}** sudah **JATUH TEMPO** sejak {abs(selisih)} hari lalu!")
+                elif selisih <= 3:
+                    notif_jatuh_tempo.append(f"🟡 **{row['nama_supplier']}** jatuh tempo dalam **{selisih} hari** ({tgl_jt}).")
+            except Exception:
+                pass
 
 # --- TOGGLE MODE DI SIDEBAR ---
 with st.sidebar:
@@ -225,11 +241,11 @@ if menu_pilihan == "🏢 Data Supplier":
             if submit_sup:
                 try:
                     payload_sup = {
-                        "no_urut": s_nourut,
-                        "nama_supplier": s_nama,
-                        "tagihan": s_tagihan,
-                        "jenis_pajak": s_pajak,
-                        "sistem_bayar": s_bayar,
+                        "no_urut": int(s_nourut),
+                        "nama_supplier": str(s_nama),
+                        "tagihan": float(s_tagihan),
+                        "jenis_pajak": str(s_pajak),
+                        "sistem_bayar": str(s_bayar),
                         "jatuh_tempo": str(s_jatuhtempo)
                     }
                     supabase.table("data_supplier").insert(payload_sup).execute()

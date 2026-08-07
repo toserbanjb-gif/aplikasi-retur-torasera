@@ -137,106 +137,27 @@ def init_supabase() -> Client:
 
 supabase = init_supabase()
 
-DAFTAR_SUPPLIER = [
-    "Belum Tau",
-    "PT ARTABOGA (Hanif)",
-    "PT. PANGAN LESTARI (Ratna)",
-    "SINAR SURYA SUKSES (Adhit)",
-    "PT Borwita Citra Prima (Listin)",
-    "PT. SINAR NIAGA SEJAHTERA (Angga)",
-    "PT SINARMAS DISTRIBUSI NUSANTARA (Mathias)",
-    "PT Eka Artha Buana Darmawan (Unilever)",
-    "PT Eka Artha Buana Darmawan (Nestle)",
-    "TRI USAHA JAYA",
-    "PT.TUMBAKMAS NIAGA (Hasan)",
-    "PT BAHAGIA INTRA NIAGA (Onky)",
-    "PT Pinus Merah Abadi (Bayuhan)",
-    "PT JAPFA FOOD INDONESIA (Uwais)",
-    "PT BUKIT MAKMUR INTI ABADI (Badrus)",
-    "PT Dinamika Daya Segara",
-    "PT SUBUR MITRA SUKSES (Taufiq)",
-    "PT AJINOMOTO SALES INDONESIA (Rosi)",
-    "PT TIGARAKSA SENTOSA",
-    "PT Masamedi Intifarm Indo (Romeo)",
-    "PT DISTRINDO AMAN SEJAHTERA (Agus)",
-    "PT BINA SAN PRIMA (Alfia)",
-    "PT LIVIA MANURI SEJATI (Aldi)",
-    "PT SUMBER BARU NIAGA (Tomi)",
-    "PT ANDATU MULIA LESTARI (Muhammad Haris)",
-    "PT JAVAS TRIPTA MANDALA (Roby)",
-    "PT KHINGGUAN (Ima)",
-    "PT TIRTA PRIMA RASA (Dwi)",
-    "PT VICTORIA CARE INDONESIA TBK (Saryono)",
-    "PT FARMA NIAGA DISTRIBUSINDO",
-    "PT TARUNAKUSUMA (Wasik)",
-    "PT SEKAWAN KOSMETIK WASANTARA (Ainun)",
-    "PT SAKTISETIA SANTOSA",
-    "SINAR SURYA UTAMA",
-    "CV SINAR TERANG (Gontor)",
-    "PT SEMESTANUSTRA DISTRINDO (Imron)",
-    "PT PELITA NUSA RAYA (Yulio)",
-    "PT Fastra Buana Kanfans (Abdul)",
-    "UD PILAR MAKMUR",
-    "PT WIRA SADANA LESTARI (Yono)",
-    "PT SAI (Yuli)",
-    "Nova (Ari)",
-    "PT SNACK (Rizky/Tris)",
-    "UD ARJO JAYA (Aldi)",
-    "COCA COLA",
-    "PT PERUSAHAAN DAGANG TEMPO",
-    "UD KENCONO WUNGU (Opium)",
-    "PT CIPTA NIAGA SEMESTA",
-    "PUNGGING ELECTRIC",
-    "PT Unirama Duta Niaga (Amru)",
-    "PT TUMBAKMAS NIAGA (Hasan)",
-    "PT SUPRALITA MANDIRI (Farida)",
-    "PT Surya Gemilang Lestari Sentosa (Davina)",
-    "PT ASIA PARAMITA INDAH (Andhie)",
-    "PT PUJI SURYA INDAH (Qomari)",
-    "PT MANOHARA ADIKA DISTRINDO (Deni)",
-    "UD SRI REJEKI (Sumar)",
-    "CV SINAR ASIA PERKASA (Valentinus)",
-    "Toserba Sundra (Kaesang)",
-    "PT PANCA PILAR (Aru)",
-    "PT INDOMARCO ADI PRIMA",
-    "PT KEVINDO PRATAMA PERKASA",
-    "PT ARTA DWITUNGGAL ABADI (Febri)",
-    "DC NURUL JADID",
-    "CV Belva",
-    "PT HARSI PANGAN UTAMA",
-    "BORNEO",
-    "EGIZ UMKM (Ibu Riz)",
-    "UD Mentari Jaya Putra",
-    "AIRA",
-    "PT KIAN RAGAM DISTRIBUTOR",
-    "OPIK PUTRA SNACK",
-    "PT PRAKARSA JAYA SENTOSA",
-    "HELLO (Memenuhi Selera Anda)",
-    "HASAN MEJA",
-    "PT CAMPINA ICE CREAM INDUSTRY",
-    "Yakult",
-    "PT LUKINDARI PERMATA",
-    "PT PARIMAS BOGA RAYA",
-    "CV NUGRAHENI KARTIKA SARI DRINGU",
-    "AZKA BAROKAH",
-    "REJEKI JAYA",
-    "DWIKARYA INDONESIA MANDIRI",
-    "PT GOLDEN AICE",
-    "BERKAH HS",
-    "PT Mitra Pharmasi Jaya",
-    "INDOWANGI PARFUM",
-    "CV Argo Bentar Gemilang",
-    "UD ANUGERAH JAYA PROBOLINGGO",
-    "PT SUKANDA DJAYA",
-    "PT ULTRAJAYA MILK INDUSTRI & TRADING CO. TBK",
-    "Bulog Indonesia",
-    "UD HARIS JAYA PROBOLINGGO",
-    "Jaya Subur",
-    "PADMATIRTA",
-    "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG",
-    "MARGA NUSARAYA",
-]
 DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
+JENIS_PENDAFTARAN = ["PKP", "Non PKP"]
+
+# Fungsi Mengambil Data Supplier dari Supabase
+def ambil_data_supplier():
+    try:
+        response = supabase.table("supplier").select("*").execute()
+        if not response.data:
+            return pd.DataFrame(columns=["id", "nama_supplier", "jenis_pendaftaran"])
+        df = pd.DataFrame(response.data)
+        df.columns = [str(c).lower() for c in df.columns]
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["id", "nama_supplier", "jenis_pendaftaran"])
+
+# Sinkronisasi pilihan supplier untuk dropdown
+df_sup_db = ambil_data_supplier()
+if not df_sup_db.empty and "nama_supplier" in df_sup_db.columns:
+    DAFTAR_SUPPLIER = ["Belum Tau"] + df_sup_db["nama_supplier"].tolist()
+else:
+    DAFTAR_SUPPLIER = ["Belum Tau"]
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
     query = supabase.table("barang_retur").select("*")
@@ -473,285 +394,367 @@ def dialog_edit_barang(item_id):
             st.success("Data berhasil diperbarui!")
             st.rerun()
 
-# --- KONTEN UTAMA DASHBOARD ---
-st.markdown("## 📦 Input Retur Barang")
-st.markdown("<p style='margin-top: -10px;'>Kelola pencatatan dan monitoring retur barang dari supplier secara real-time.</p>", unsafe_allow_html=True)
-
-df_semua = ambil_data_retur()
-
-# --- 1. GRAFIK TREN DI BAGIAN ATAS ---
-st.markdown("### 📈 Grafik Tren Nilai Retur over Time")
-if not df_semua.empty and "tgl_input" in df_semua.columns:
-    df_chart = df_semua.groupby("tgl_input")["total"].sum().reset_index()
-    df_chart = df_chart.sort_values("tgl_input")
-
-    if len(df_chart) > 1:
-        nilai_awal = df_chart["total"].iloc[0]
-        nilai_akhir = df_chart["total"].iloc[-1]
-        
-        if nilai_akhir > nilai_awal:
-            warna_garis = "#EF4444"  # Merah
-        else:
-            warna_garis = "#22C55E"  # Hijau
-    else:
-        warna_garis = "#22C55E"
-
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(
-        x=df_chart['tgl_input'],
-        y=df_chart['total'],
-        mode='lines+markers',
-        line=dict(color=warna_garis, width=4),
-        marker=dict(size=8),
-        hovertemplate='Tanggal: %{x}<br>Total: Rp %{y:,.0f}<extra></extra>'
-    ))
-
-    fig.update_layout(
-        xaxis_title="Tanggal Input",
-        yaxis_title="Total (Rp)",
-        margin=dict(l=20, r=20, t=30, b=20),
-        height=380,
-        template=plotly_template
-    )
-
-    st.plotly_chart(fig, use_container_width=True)
-else:
-    st.info("Belum cukup data tanggal untuk menampilkan grafik tren.")
-
-st.divider()
-
-# --- 2. STATISTIK KARTU METRIK ---
-col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
-total_retur_count = len(df_semua)
-total_supplier_count = df_semua["supplier"].nunique() if not df_semua.empty else 0
-total_pending = len(df_semua[df_semua["status"] == "Pengajuan"]) if not df_semua.empty else 0
-total_sukses = len(df_semua[df_semua["status"] == "Sukses"]) if not df_semua.empty else 0
-grand_total_all = df_semua['total'].sum() if not df_semua.empty else 0
-
-col_m1.metric("Total Retur", f"{total_retur_count} Item")
-col_m2.metric("Supplier", f"{total_supplier_count}")
-col_m3.metric("Menunggu", f"{total_pending}")
-col_m4.metric("Sukses", f"{total_sukses}")
-col_m5.metric("Total Nilai", f"Rp {grand_total_all:,.0f}")
-
-st.divider()
-
-# --- FORM INPUT & PENCATATAN ---
-with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded=True):
-    tab_satuan, tab_paste = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data"])
-
-    with tab_satuan:
-        with st.form("form_tambah_retur", clear_on_submit=True):
-            f_in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER, key="satuan_sup")
+# --- ROUTING HALAMAN BERDASARKAN MENU SIDEBAR ---
+if menu_piliations_check := menu_pilihan == "🏢 Data Supplier":
+    st.markdown("## 🏢 Manajemen Data Supplier")
+    st.markdown("<p style='margin-top: -10px;'>Kelola daftar nama supplier dan status pendaftaran perpajakannya (PKP / Non PKP).</p>", unsafe_allow_html=True)
+    
+    with st.expander("➕ Tambah Supplier Baru", expanded=True):
+        with st.form("form_tambah_supplier", clear_on_submit=True):
+            nama_baru = st.text_input("Nama Supplier")
+            jenis_pendaftaran_baru = st.selectbox("Jenis Pendaftaran", JENIS_PENDAFTARAN)
             
-            c1, c2 = st.columns(2)
-            with c1:
-                f_in_kode = st.text_input("Kode / Barcode")
-            with c2:
-                f_in_qty = st.number_input("Qty PCS", min_value=1, value=1)
-
-            c3, c4 = st.columns(2)
-            with c3:
-                f_in_nama = st.text_input("Nama Barang")
-            with c4:
-                f_in_hpp = st.number_input("HPP (Rp)", min_value=0.0, value=0.0, step=500.0)
-
-            c5, c6, c7 = st.columns(3)
-            with c5:
-                f_in_ket = st.selectbox("Keterangan", ["Rusak", "ED", "Salah PO", "Lainnya"])
-            with c6:
-                f_in_ed = st.text_input("ED (Tanggal / -)", value="-")
-            with c7:
-                f_in_status = st.selectbox("Status", DAFTAR_STATUS, index=0)
-
-            submitted = st.form_submit_button("💾 Simpan Barang Retur", type="primary")
-            if submitted:
-                if not f_in_nama.strip():
-                    st.error("Nama barang tidak boleh kosong!")
+            submit_sup = st.form_submit_button("💾 Simpan Supplier", type="primary")
+            if submit_sup:
+                if not nama_baru.strip():
+                    st.error("Nama supplier tidak boleh kosong!")
                 else:
-                    is_duplicate = cek_barang_duplikat(f_in_sup, f_in_kode, f_in_nama)
-                    if is_duplicate:
-                        st.warning("⚠️ Peringatan: Barang dengan Nama atau Kode tersebut sudah terdaftar di database untuk supplier ini!")
-                        st.stop()
-                    
-                    is_sukses = (f_in_status == "Sukses")
-                    final_qty = 0 if is_sukses else f_in_qty
-                    total_val = 0 if is_sukses else (f_in_qty * f_in_hpp)
-
-                    # Payload TANPA kolom id agar diserahkan penuh ke Identity Supabase
-                    payload = {
-                        "supplier": f_in_sup,
-                        "kode": f_in_kode if f_in_kode else "-",
-                        "nama": f_in_nama,
-                        "qty": final_qty,
-                        "hpp": f_in_hpp,
-                        "total": total_val,
-                        "ket": f_in_ket,
-                        "ed": f_in_ed,
-                        "status": f_in_status,
-                        "tgl_input": str(datetime.date.today())
-                    }
                     try:
-                        supabase.table("barang_retur").insert(payload).execute()
-                        st.success("Barang retur berhasil ditambahkan!")
+                        supabase.table("supplier").insert({
+                            "nama_supplier": nama_baru.strip(),
+                            "jenis_pendaftaran": jenis_pendaftaran_baru
+                        }).execute()
+                        st.success("Supplier baru berhasil ditambahkan!")
                         st.rerun()
                     except Exception as e:
-                        st.error(f"Terjadi kesalahan pada database: {e}")
+                        st.error(f"Gagal menyimpan ke database: {e}")
 
-    with tab_paste:
-        paste_sup_default = st.selectbox("Pilih Supplier Default", DAFTAR_SUPPLIER, key="paste_sup_target")
-        raw_paste_text = st.text_area("Paste Data Tabel di Sini:", height=120)
-        if raw_paste_text and st.button("💾 Proses Data Paste", type="primary"):
-            st.success("Data berhasil diproses.")
+    st.divider()
+    st.markdown("### 📋 Daftar Supplier Terdaftar")
+    
+    df_supplier_view = ambil_data_supplier()
+    if not df_supplier_view.empty:
+        # Tambahkan Nomor Urut
+        df_supplier_view.insert(0, "No.", range(1, len(df_supplier_view) + 1))
+        
+        edited_supplier_df = st.data_editor(
+            df_supplier_view,
+            column_config={
+                "id": st.column_config.NumberColumn("ID Database", disabled=True),
+                "no.": st.column_config.NumberColumn("No.", disabled=True),
+                "nama_supplier": st.column_config.TextColumn("Nama Supplier"),
+                "jenis_pendaftaran": st.column_config.SelectboxColumn("Jenis Pendaftaran", options=JENIS_PENDAFTARAN, required=True),
+            },
+            disabled=["id", "no."],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_tabel_supplier"
+        )
 
-st.divider()
+        col_s1, col_s2 = st.columns(2)
+        with col_s1:
+            if st.button("💾 Simpan Perubahan Tabel Supplier", type="primary", use_container_width=True):
+                count_updated = 0
+                for _, row in edited_supplier_df.iterrows():
+                    orig_row = df_supplier_view.loc[df_supplier_view["id"] == row["id"]]
+                    if not orig_row.empty:
+                        orig = orig_row.iloc[0]
+                        if str(row["nama_supplier"]) != str(orig["nama_supplier"]) or str(row["jenis_pendaftaran"]) != str(orig["jenis_pendaftaran"]):
+                            supabase.table("supplier").update({
+                                "nama_supplier": str(row["nama_supplier"]),
+                                "jenis_pendaftaran": str(row["jenis_pendaftaran"])
+                            }).eq("id", int(row["id"])).execute()
+                            count_updated += 1
+                if count_updated > 0:
+                    st.success(f"Berhasil memperbarui {count_updated} data supplier!")
+                    st.rerun()
+                else:
+                    st.info("Tidak ada perubahan data yang terdeteksi.")
+        with col_s2:
+            sup_ids_to_delete = st.multiselect("Pilih ID Supplier yang ingin dihapus:", options=df_supplier_view["id"].tolist(), key="del_sup_multiselect")
+            if st.button("🗑️ Hapus Supplier Terpilih", type="secondary", use_container_width=True):
+                if not sup_ids_to_delete:
+                    st.warning("Pilih minimal satu ID supplier yang ingin dihapus.")
+                else:
+                    for s_id in sup_ids_to_delete:
+                        try:
+                            supabase.table("supplier").delete().eq("id", int(s_id)).execute()
+                        except Exception:
+                            pass
+                    st.success("Supplier terpilih berhasil dihapus!")
+                    st.rerun()
+    else:
+        st.info("Belum ada data supplier yang tersimpan.")
 
-# --- FILTER DAN PENCARIAN ---
-f_col1, f_col2, f_col3 = st.columns(3)
-with f_col1:
-    filter_sup = st.selectbox("Filter Supplier", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_retur")
-with f_col2:
-    filter_stat = st.selectbox("Filter Status", ["SEMUA STATUS"] + DAFTAR_STATUS, key="f_stat_retur")
-with f_col3:
-    filter_cari = st.text_input("🔍 Cari Kode / Nama / Ket / Supplier", key="f_cari_retur")
+else:
+    # --- KONTEN UTAMA DASHBOARD (HOME / INPUT RETUR) ---
+    st.markdown("## 📦 Input Retur Barang")
+    st.markdown("<p style='margin-top: -10px;'>Kelola pencatatan dan monitoring retur barang dari supplier secara real-time.</p>", unsafe_allow_html=True)
 
-df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
+    df_semua = ambil_data_retur()
 
-st.markdown("### 📋 Daftar Barang Retur")
+    # --- 1. GRAFIK TREN DI BAGIAN ATAS ---
+    st.markdown("### 📈 Grafik Tren Nilai Retur over Time")
+    if not df_semua.empty and "tgl_input" in df_semua.columns:
+        df_chart = df_semua.groupby("tgl_input")["total"].sum().reset_index()
+        df_chart = df_chart.sort_values("tgl_input")
 
-if not df_retur.empty:
-    edited_df = st.data_editor(
-        df_retur,
-        column_config={
-            "id": st.column_config.NumberColumn("ID", disabled=True),
-            "kode": st.column_config.TextColumn("Kode"),
-            "nama": st.column_config.TextColumn("Nama Barang"),
-            "qty": st.column_config.NumberColumn("Qty"),
-            "hpp": st.column_config.NumberColumn("HPP", format="Rp %'d"),
-            "total": st.column_config.NumberColumn("Total", format="Rp %'d"),
-            "ket": st.column_config.TextColumn("Ket."),
-            "ed": st.column_config.TextColumn("ED"),
-            "supplier": st.column_config.TextColumn("Supplier"),
-            "status": st.column_config.SelectboxColumn("Status", options=DAFTAR_STATUS, required=True),
-            "tgl_input": st.column_config.TextColumn("Tgl Input", disabled=True),
-        },
-        disabled=["id", "tgl_input"],
-        hide_index=True,
-        use_container_width=True,
-        key="editor_tabel_retur"
-    )
+        if len(df_chart) > 1:
+            nilai_awal = df_chart["total"].iloc[0]
+            nilai_akhir = df_chart["total"].iloc[-1]
+            
+            if nilai_akhir > nilai_awal:
+                warna_garis = "#EF4444"  # Merah
+            else:
+                warna_garis = "#22C55E"  # Hijau
+        else:
+            warna_garis = "#22C55E"
 
-    grand_total = df_retur["total"].sum()
-    st.markdown(f"#### **Grand Total: Rp {grand_total:,.0f}**")
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df_chart['tgl_input'],
+            y=df_chart['total'],
+            mode='lines+markers',
+            line=dict(color=warna_garis, width=4),
+            marker=dict(size=8),
+            hovertemplate='Tanggal: %{x}<br>Total: Rp %{y:,.0f}<extra></extra>'
+        ))
+
+        fig.update_layout(
+            xaxis_title="Tanggal Input",
+            yaxis_title="Total (Rp)",
+            margin=dict(l=20, r=20, t=30, b=20),
+            height=380,
+            template=plotly_template
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Belum cukup data tanggal untuk menampilkan grafik tren.")
+
     st.divider()
 
-    # --- KONTROL AKSI ---
-    st.markdown("### 🛠️ Pengelolaan Data Terpilih")
-    list_all_ids = df_retur["id"].tolist()
-    selected_ids = st.multiselect("Pilih ID Barang Retur (untuk Aksi Edit / Ubah Status / Hapus):", options=list_all_ids)
+    # --- 2. STATISTIK KARTU METRIK ---
+    col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
+    total_retur_count = len(df_semua)
+    total_supplier_count = df_semua["supplier"].nunique() if not df_semua.empty else 0
+    total_pending = len(df_semua[df_semua["status"] == "Pengajuan"]) if not df_semua.empty else 0
+    total_sukses = len(df_semua[df_semua["status"] == "Sukses"]) if not df_semua.empty else 0
+    grand_total_all = df_semua['total'].sum() if not df_semua.empty else 0
 
-    act_col1, act_col2, act_col3, act_col4 = st.columns(4)
+    col_m1.metric("Total Retur", f"{total_retur_count} Item")
+    col_m2.metric("Supplier", f"{total_supplier_count}")
+    col_m3.metric("Menunggu", f"{total_pending}")
+    col_m4.metric("Sukses", f"{total_sukses}")
+    col_m5.metric("Total Nilai", f"Rp {grand_total_all:,.0f}")
 
-    with act_col1:
-        if st.button("💾 Simpan Perubahan", type="primary", use_container_width=True):
-            perubahan_tercatat = 0
-            for idx, row in edited_df.iterrows():
-                original_row = df_retur.loc[df_retur["id"] == row["id"]]
-                if not original_row.empty:
-                    orig = original_row.iloc[0]
-                    if (
-                        str(row["kode"]) != str(orig["kode"]) or
-                        str(row["nama"]) != str(orig["nama"]) or
-                        int(row["qty"]) != int(orig["qty"]) or
-                        float(row["hpp"]) != float(orig["hpp"]) or
-                        str(row["ket"]) != str(orig["ket"]) or
-                        str(row["ed"]) != str(orig["ed"]) or
-                        str(row["supplier"]) != str(orig["supplier"]) or
-                        str(row["status"]) != str(orig["status"])
-                    ):
-                        is_sukses = (str(row["status"]) == "Sukses")
-                        new_qty = 0 if is_sukses else int(row["qty"])
-                        new_total = 0 if is_sukses else (int(row["qty"]) * float(row["hpp"]))
+    st.divider()
 
-                        supabase.table("barang_retur").update({
-                            "kode": str(row["kode"]),
-                            "nama": str(row["nama"]),
-                            "qty": new_qty,
-                            "hpp": float(row["hpp"]),
-                            "total": float(new_total),
-                            "ket": str(row["ket"]),
-                            "ed": str(row["ed"]),
-                            "supplier": str(row["supplier"]),
-                            "status": str(row["status"])
-                        }).eq("id", int(row["id"])).execute()
-                        perubahan_tercatat += 1
+    # --- FORM INPUT & PENCATATAN ---
+    with st.expander("➕ Form Tambah Barang Retur Baru (Satuan & Massal)", expanded=True):
+        tab_satuan, tab_paste = st.tabs(["📝 Input Satuan Manual", "📋 Copy-Paste Data"])
 
-            if perubahan_tercatat > 0:
-                st.success(f"Berhasil menyimpan perubahan untuk {perubahan_tercatat} baris!")
-                st.rerun()
-            else:
-                st.info("Tidak ada perubahan data yang terdeteksi.")
+        with tab_satuan:
+            with st.form("form_tambah_retur", clear_on_submit=True):
+                f_in_sup = st.selectbox("Supplier", DAFTAR_SUPPLIER, key="satuan_sup")
+                
+                c1, c2 = st.columns(2)
+                with c1:
+                    f_in_kode = st.text_input("Kode / Barcode")
+                with c2:
+                    f_in_qty = st.number_input("Qty PCS", min_value=1, value=1)
 
-    with act_col2:
-        if st.button("✏️ Edit Data Terpilih", use_container_width=True):
-            if not selected_ids or len(selected_ids) != 1:
-                st.warning("Pilih tepat **1 ID** saja untuk diedit.")
-            else:
-                dialog_edit_barang(selected_ids[0])
+                c3, c4 = st.columns(2)
+                with c3:
+                    f_in_nama = st.text_input("Nama Barang")
+                with c4:
+                    f_in_hpp = st.number_input("HPP (Rp)", min_value=0.0, value=0.0, step=500.0)
 
-    with act_col3:
-        status_baru_massal = st.selectbox("Status:", DAFTAR_STATUS, key="status_massal_input", label_visibility="collapsed")
-        if st.button("🔄 Ubah Status", use_container_width=True):
-            if not selected_ids:
-                st.warning("Pilih minimal satu ID barang!")
-            else:
-                if status_baru_massal == "Sukses":
-                    dialog_konfirmasi_setujui(selected_ids, status_baru_massal)
+                c5, c6, c7 = st.columns(3)
+                with c5:
+                    f_in_ket = st.selectbox("Keterangan", ["Rusak", "ED", "Salah PO", "Lainnya"])
+                with c6:
+                    f_in_ed = st.text_input("ED (Tanggal / -)", value="-")
+                with c7:
+                    f_in_status = st.selectbox("Status", DAFTAR_STATUS, index=0)
+
+                submitted = st.form_submit_button("💾 Simpan Barang Retur", type="primary")
+                if submitted:
+                    if not f_in_nama.strip():
+                        st.error("Nama barang tidak boleh kosong!")
+                    else:
+                        is_duplicate = cek_barang_duplikat(f_in_sup, f_in_kode, f_in_nama)
+                        if is_duplicate:
+                            st.warning("⚠️ Peringatan: Barang dengan Nama atau Kode tersebut sudah terdaftar di database untuk supplier ini!")
+                            st.stop()
+                        
+                        is_sukses = (f_in_status == "Sukses")
+                        final_qty = 0 if is_sukses else f_in_qty
+                        total_val = 0 if is_sukses else (f_in_qty * f_in_hpp)
+
+                        payload = {
+                            "supplier": f_in_sup,
+                            "kode": f_in_kode if f_in_kode else "-",
+                            "nama": f_in_nama,
+                            "qty": final_qty,
+                            "hpp": f_in_hpp,
+                            "total": total_val,
+                            "ket": f_in_ket,
+                            "ed": f_in_ed,
+                            "status": f_in_status,
+                            "tgl_input": str(datetime.date.today())
+                        }
+                        try:
+                            supabase.table("barang_retur").insert(payload).execute()
+                            st.success("Barang retur berhasil ditambahkan!")
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Terjadi kesalahan pada database: {e}")
+
+        with tab_paste:
+            paste_sup_default = st.selectbox("Pilih Supplier Default", DAFTAR_SUPPLIER, key="paste_sup_target")
+            raw_paste_text = st.text_area("Paste Data Tabel di Sini:", height=120)
+            if raw_paste_text and st.button("💾 Proses Data Paste", type="primary"):
+                st.success("Data berhasil diproses.")
+
+    st.divider()
+
+    # --- FILTER DAN PENCARIAN ---
+    f_col1, f_col2, f_col3 = st.columns(3)
+    with f_col1:
+        filter_sup = st.selectbox("Filter Supplier", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="f_sup_retur")
+    with f_col2:
+        filter_stat = st.selectbox("Filter Status", ["SEMUA STATUS"] + DAFTAR_STATUS, key="f_stat_retur")
+    with f_col3:
+        filter_cari = st.text_input("🔍 Cari Kode / Nama / Ket / Supplier", key="f_cari_retur")
+
+    df_retur = ambil_data_retur(filter_sup, filter_stat, filter_cari)
+
+    st.markdown("### 📋 Daftar Barang Retur")
+
+    if not df_retur.empty:
+        edited_df = st.data_editor(
+            df_retur,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", disabled=True),
+                "kode": st.column_config.TextColumn("Kode"),
+                "nama": st.column_config.TextColumn("Nama Barang"),
+                "qty": st.column_config.NumberColumn("Qty"),
+                "hpp": st.column_config.NumberColumn("HPP", format="Rp %'d"),
+                "total": st.column_config.NumberColumn("Total", format="Rp %'d"),
+                "ket": st.column_config.TextColumn("Ket."),
+                "ed": st.column_config.TextColumn("ED"),
+                "supplier": st.column_config.TextColumn("Supplier"),
+                "status": st.column_config.SelectboxColumn("Status", options=DAFTAR_STATUS, required=True),
+                "tgl_input": st.column_config.TextColumn("Tgl Input", disabled=True),
+            },
+            disabled=["id", "tgl_input"],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_tabel_retur"
+        )
+
+        grand_total = df_retur["total"].sum()
+        st.markdown(f"#### **Grand Total: Rp {grand_total:,.0f}**")
+        st.divider()
+
+        # --- KONTROL AKSI ---
+        st.markdown("### 🛠️ Pengelolaan Data Terpilih")
+        list_all_ids = df_retur["id"].tolist()
+        selected_ids = st.multiselect("Pilih ID Barang Retur (untuk Aksi Edit / Ubah Status / Hapus):", options=list_all_ids)
+
+        act_col1, act_col2, act_col3, act_col4 = st.columns(4)
+
+        with act_col1:
+            if st.button("💾 Simpan Perubahan", type="primary", use_container_width=True):
+                perubahan_tercatat = 0
+                for idx, row in edited_df.iterrows():
+                    original_row = df_retur.loc[df_retur["id"] == row["id"]]
+                    if not original_row.empty:
+                        orig = original_row.iloc[0]
+                        if (
+                            str(row["kode"]) != str(orig["kode"]) or
+                            str(row["nama"]) != str(orig["nama"]) or
+                            int(row["qty"]) != int(orig["qty"]) or
+                            float(row["hpp"]) != float(orig["hpp"]) or
+                            str(row["ket"]) != str(orig["ket"]) or
+                            str(row["ed"]) != str(orig["ed"]) or
+                            str(row["supplier"]) != str(orig["supplier"]) or
+                            str(row["status"]) != str(orig["status"])
+                        ):
+                            is_sukses = (str(row["status"]) == "Sukses")
+                            new_qty = 0 if is_sukses else int(row["qty"])
+                            new_total = 0 if is_sukses else (int(row["qty"]) * float(row["hpp"]))
+
+                            supabase.table("barang_retur").update({
+                                "kode": str(row["kode"]),
+                                "nama": str(row["nama"]),
+                                "qty": new_qty,
+                                "hpp": float(row["hpp"]),
+                                "total": float(new_total),
+                                "ket": str(row["ket"]),
+                                "ed": str(row["ed"]),
+                                "supplier": str(row["supplier"]),
+                                "status": str(row["status"])
+                            }).eq("id", int(row["id"])).execute()
+                            perubahan_tercatat += 1
+
+                if perubahan_tercatat > 0:
+                    st.success(f"Berhasil menyimpan perubahan untuk {perubahan_tercatat} baris!")
+                    st.rerun()
+                else:
+                    st.info("Tidak ada perubahan data yang terdeteksi.")
+
+        with act_col2:
+            if st.button("✏️ Edit Data Terpilih", use_container_width=True):
+                if not selected_ids or len(selected_ids) != 1:
+                    st.warning("Pilih tepat **1 ID** saja untuk diedit.")
+                else:
+                    dialog_edit_barang(selected_ids[0])
+
+        with act_col3:
+            status_baru_massal = st.selectbox("Status:", DAFTAR_STATUS, key="status_massal_input", label_visibility="collapsed")
+            if st.button("🔄 Ubah Status", use_container_width=True):
+                if not selected_ids:
+                    st.warning("Pilih minimal satu ID barang!")
+                else:
+                    if status_baru_massal == "Sukses":
+                        dialog_konfirmasi_setujui(selected_ids, status_baru_massal)
+                    else:
+                        for item_id in selected_ids:
+                            try:
+                                valid_id = int(float(str(item_id)))
+                                supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", valid_id).execute()
+                            except (ValueError, TypeError):
+                                continue
+                        st.success("Status berhasil diperbarui!")
+                        st.rerun()
+
+        with act_col4:
+            st.markdown("")
+            if st.button("🗑️ Hapus ID", type="secondary", use_container_width=True):
+                if not selected_ids:
+                    st.warning("Pilih minimal satu ID yang ingin dihapus!")
                 else:
                     for item_id in selected_ids:
                         try:
                             valid_id = int(float(str(item_id)))
-                            supabase.table("barang_retur").update({"status": status_baru_massal}).eq("id", valid_id).execute()
+                            supabase.table("barang_retur").delete().eq("id", valid_id).execute()
                         except (ValueError, TypeError):
                             continue
-                    st.success("Status berhasil diperbarui!")
+                    st.success("Data terpilih berhasil dihapus!")
                     st.rerun()
-
-    with act_col4:
-        st.markdown("")
-        if st.button("🗑️ Hapus ID", type="secondary", use_container_width=True):
-            if not selected_ids:
-                st.warning("Pilih minimal satu ID yang ingin dihapus!")
-            else:
-                for item_id in selected_ids:
-                    try:
-                        valid_id = int(float(str(item_id)))
-                        supabase.table("barang_retur").delete().eq("id", valid_id).execute()
-                    except (ValueError, TypeError):
-                        continue
-                st.success("Data terpilih berhasil dihapus!")
-                st.rerun()
-else:
-    st.info("Belum ada data barang retur.")
-
-st.divider()
-
-# --- CETAK PDF ---
-st.markdown("### 🖨️ Cetak Nota Retur (PDF)")
-col_pdf1, col_pdf2 = st.columns([3, 1])
-with col_pdf1:
-    pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
-with col_pdf2:
-    st.markdown("<br>", unsafe_allow_html=True)
-    df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target) if pdf_supplier_target != "SEMUA SUPPLIER" else df_semua
-    if not df_pdf_data.empty:
-        pdf_bytes = generate_pdf_retur(df_pdf_data, pdf_supplier_target)
-        st.download_button(
-            label="📄 Download PDF Nota Retur",
-            data=pdf_bytes,
-            file_name=f"Nota_Retur_{pdf_supplier_target.replace(' ', '_')}.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
     else:
-        st.button("📄 Download PDF Kosong", disabled=True, use_container_width=True)
+        st.info("Belum ada data barang retur.")
+
+    st.divider()
+
+    # --- CETAK PDF ---
+    st.markdown("### 🖨️ Cetak Nota Retur (PDF)")
+    col_pdf1, col_pdf2 = st.columns([3, 1])
+    with col_pdf1:
+        pdf_supplier_target = st.selectbox("Pilih Supplier untuk Cetak Nota:", ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER, key="pdf_sup_target")
+    with col_pdf2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target) if pdf_supplier_target != "SEMUA SUPPLIER" else df_semua
+        if not df_pdf_data.empty:
+            pdf_bytes = generate_pdf_retur(df_pdf_data, pdf_supplier_target)
+            st.download_button(
+                label="📄 Download PDF Nota Retur",
+                data=pdf_bytes,
+                file_name=f"Nota_Retur_{pdf_supplier_target.replace(' ', '_')}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.button("📄 Download PDF Kosong", disabled=True, use_container_width=True)

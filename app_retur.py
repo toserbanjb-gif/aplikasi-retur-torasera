@@ -358,9 +358,56 @@ with head_c2:
 st.divider()
 
 # ==========================================
+# MENU 0: HOME / DASHBOARD
+# ==========================================
+if menu_pilihan == "🏠 Home":
+    st.markdown("## 🏠 Dashboard Utama")
+    st.markdown("<p style='margin-top: -10px;'>Ringkasan performa sistem retur barang dan total tagihan supplier Toserba Nurja Berkah.</p>", unsafe_allow_html=True)
+    
+    df_r_home = ambil_data_retur()
+    df_s_home = ambil_data_supplier()
+    
+    tot_retur_item = df_r_home["qty"].sum() if not df_r_home.empty else 0
+    tot_nilai_retur = df_r_home["total"].sum() if not df_r_home.empty and "total" in df_r_home.columns else 0
+    tot_tagihan_supp = df_s_home["tagihan"].sum() if not df_s_home.empty else 0
+    
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        st.metric("📦 Total Qty Retur", f"{tot_retur_item:,.0f} Pcs")
+    with m2:
+        st.metric("💰 Total Nilai Retur", f"Rp {tot_nilai_retur:,.0f}")
+    with m3:
+        st.metric("🏢 Total Tagihan Supplier", f"Rp {tot_tagihan_supp:,.0f}")
+        
+    st.divider()
+    
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        st.markdown("### 📊 Status Retur Barang")
+        if not df_r_home.empty:
+            status_counts = df_r_home["status"].value_counts().reset_index()
+            status_counts.columns = ["status", "count"]
+            fig_status = go.Figure(data=[go.Pie(labels=status_counts["status"], values=status_counts["count"], hole=.4)])
+            fig_status.update_layout(template=plotly_template, margin=dict(t=20, b=20, l=20, r=20))
+            st.plotly_chart(fig_status, use_container_width=True)
+        else:
+            st.info("Belum ada data retur untuk ditampilkan.")
+            
+    with col_g2:
+        st.markdown("### 📋 Keterangan Retur Terbanyak")
+        if not df_r_home.empty:
+            ket_counts = df_r_home["ket"].value_counts().reset_index()
+            ket_counts.columns = ["keterangan", "count"]
+            fig_ket = go.Figure(data=[go.Bar(x=ket_counts["keterangan"], y=ket_counts["count"], marker_color="#2563EB")])
+            fig_ket.update_layout(template=plotly_template, margin=dict(t=20, b=20, l=20, r=20))
+            st.plotly_chart(fig_ket, use_container_width=True)
+        else:
+            st.info("Belum ada data keterangan retur.")
+
+# ==========================================
 # MENU 1: INPUT RETUR
 # ==========================================
-if menu_pilihan == "📦 Input Retur":
+elif menu_pilihan == "📦 Input Retur":
     st.markdown("## 📦 Input Barang Retur")
     st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan barang retur baru ke database sistem.</p>", unsafe_allow_html=True)
     
@@ -412,7 +459,7 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: LIST RETUR (PERBAIKAN KOLOM & EDIT TABLE)
+# MENU 2: LIST RETUR
 # ==========================================
 elif menu_pilihan == "📋 List Retur":
     st.markdown("## 📋 List Data Retur & Manajemen Edit")
@@ -635,7 +682,7 @@ elif menu_pilihan == "🏢 Data Supplier":
                     st.success(f"Berhasil memperbarui {count_upd} data supplier!")
                     st.rerun()
                 else:
-                    st.info("Tidak ada perubahan data yang terdeteksi.")
+                    st.info("Tidak ada perubahan data supplier yang terdeteksi.")
         with col_s2:
             if st.button("🗑️ Hapus Supplier Terpilih", type="secondary", use_container_width=True):
                 if not selected_sup_ids:
@@ -646,42 +693,36 @@ elif menu_pilihan == "🏢 Data Supplier":
                             supabase.table("data_supplier").delete().eq("id", int(float(str(sid)))).execute()
                         except (ValueError, TypeError):
                             continue
-                    st.success("Supplier terpilih berhasil dihapus!")
+                    st.success("Data supplier terpilih berhasil dihapus!")
                     st.rerun()
     else:
-        st.info("Belum ada data supplier yang tersimpan.")
+        st.info("Tidak ada data supplier yang ditemukan.")
 
 # ==========================================
-# MENU 4: HOME
-# ==========================================
-elif menu_pilihan == "🏠 Home":
-    st.markdown("## 🏠 Halaman Utama Dashboard")
-    st.markdown("Selamat datang di sistem manajemen retur dan supplier Toserba Nurja Berkah.")
-    
-    df_home = ambil_data_retur()
-    col_h1, col_h2, col_h3 = st.columns(3)
-    col_h1.metric("Total Barang Retur", f"{len(df_home)} Item")
-    col_h2.metric("Total Supplier Terdaftar", f"{len(df_sup_notif)} Supplier")
-    col_h3.metric("Total Nilai Retur", f"Rp {df_home['total'].sum() if not df_home.empty else 0:,.0f}")
-
-# ==========================================
-# MENU 5: LAPORAN ANALITIK
+# MENU 4: LAPORAN ANALITIK
 # ==========================================
 elif menu_pilihan == "📊 Laporan":
-    st.markdown("## 📊 Laporan Analitik")
-    df_lap = ambil_data_retur()
-    if not df_lap.empty and "tgl_input" in df_lap.columns:
-        df_chart = df_lap.groupby("tgl_input")["total"].sum().reset_index()
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_chart['tgl_input'], y=df_chart['total'], mode='lines+markers', line=dict(color="#2563EB", width=3)))
-        fig.update_layout(title="Grafik Total Nilai Retur", xaxis_title="Tanggal", yaxis_title="Total (Rp)", template=plotly_template)
-        st.plotly_chart(fig, use_container_width=True)
+    st.markdown("## 📊 Laporan & Analitik Sistem")
+    st.markdown("<p style='margin-top: -10px;'>Analisis mendalam mengenai tren retur barang dan rekapitulasi keuangan supplier.</p>", unsafe_allow_html=True)
+    
+    df_lap_retur = ambil_data_retur()
+    df_lap_supp = ambil_data_supplier()
+    
+    if not df_lap_retur.empty:
+        st.markdown("### 📈 Top 5 Supplier dengan Retur Terbanyak")
+        top_supp = df_lap_retur.groupby("supplier")["total"].sum().reset_index().sort_values(by="total", ascending=False).head(5)
+        fig_top = go.Figure(data=[go.Bar(x=top_supp["supplier"], y=top_supp["total"], marker_color="#2563EB")])
+        fig_top.update_layout(template=plotly_template, yaxis_title="Total Nilai Retur (Rp)", margin=dict(t=20, b=20, l=20, r=20))
+        st.plotly_chart(fig_top, use_container_width=True)
     else:
-        st.info("Belum ada data untuk laporan.")
+        st.info("Belum ada data retur untuk laporan analitik.")
 
 # ==========================================
-# MENU 6: PENGATURAN
+# MENU 5: PENGATURAN
 # ==========================================
 elif menu_pilihan == "⚙️ Pengaturan":
     st.markdown("## ⚙️ Pengaturan Sistem")
-    st.write("Kelola konfigurasi aplikasi dan koneksi Supabase Anda di sini.")
+    st.markdown("<p style='margin-top: -10px;'>Konfigurasi sistem manajemen retur Toserba Nurja Berkah.</p>", unsafe_allow_html=True)
+    st.info("Sistem berjalan normal terhubung ke basis data Supabase.")
+    st.markdown(f"**Tema Aktif:** {st.session_state.theme}")
+    st.markdown(f"**Lokasi Toko:** Probolinggo, Jawa Timur")

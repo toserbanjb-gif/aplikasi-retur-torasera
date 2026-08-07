@@ -8,6 +8,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from supabase import Client, create_client
+import reportlab.lib.pagesizes
 
 # --- CONFIG PAGE ---
 st.set_page_config(
@@ -151,7 +152,79 @@ def generate_pdf_supplier(df_export, jenis_filter):
     buffer.seek(0)
     return buffer.getvalue()
 
-import reportlab.lib.pagesizes
+# --- FUNGSI GENERATE PDF LAPORAN RETUR PER SUPPLIER ---
+def generate_pdf_retur_supplier(df_export, nama_supplier):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=reportlab.lib.pagesizes.A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'), alignment=1, spaceAfter=4)
+    style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'), alignment=1, spaceAfter=15)
+    style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#1E293B'))
+    style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8.5, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
+
+    elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
+    elements.append(Paragraph(f"Laporan Barang Retur — Supplier: <b>{nama_supplier}</b><br>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
+    elements.append(Spacer(1, 5*mm))
+
+    table_data = [[
+        Paragraph("<b>Kode</b>", style_cell_bold),
+        Paragraph("<b>Nama Barang</b>", style_cell_bold),
+        Paragraph("<b>Qty</b>", style_cell_bold),
+        Paragraph("<b>HPP (Rp)</b>", style_cell_bold),
+        Paragraph("<b>Total (Rp)</b>", style_cell_bold),
+        Paragraph("<b>Ket</b>", style_cell_bold),
+        Paragraph("<b>Status</b>", style_cell_bold)
+    ]]
+
+    total_nilai_retur = 0
+    for idx, row in df_export.iterrows():
+        qty_v = float(row['qty'])
+        hpp_v = float(row['hpp'])
+        tot_v = float(row['total']) if 'total' in row and pd.notna(row['total']) else (qty_v * hpp_v)
+        total_nilai_retur += tot_v
+        
+        table_data.append([
+            Paragraph(str(row['kode']), style_cell),
+            Paragraph(str(row['nama']), style_cell),
+            Paragraph(str(int(qty_v)), style_cell),
+            Paragraph(f"{hpp_v:,.0f}", style_cell),
+            Paragraph(f"{tot_v:,.0f}", style_cell),
+            Paragraph(str(row['ket']), style_cell),
+            Paragraph(str(row['status']), style_cell)
+        ])
+
+    table_data.append([
+        Paragraph("<b>TOTAL</b>", style_cell_bold),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph(f"<b>Rp {total_nilai_retur:,.0f}</b>", style_cell_bold),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell)
+    ])
+
+    col_widths = [25*mm, 60*mm, 15*mm, 25*mm, 25*mm, 15*mm, 25*mm]
+    t = Table(table_data, colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2563EB')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.HexColor('#CBD5E1')),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#F1F5F9')),
+        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.HexColor('#0F172A')),
+    ]))
+    
+    for i in range(len(col_widths)):
+        table_data[0][i].style.textColor = colors.whitesmoke
+
+    elements.append(t)
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # --- TOGGLE MODE DI SIDEBAR ---
 with st.sidebar:
@@ -302,7 +375,7 @@ if menu_pilihan == "📦 Input Retur":
             f_ed = st.text_input("Tanggal ED (jika ada, misal: 31-12-2026 atau -)")
         with fc3:
             f_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER)
-            f_status = st.selectbox("Status Retur", ["Pengajuan", "Sedang Diverifikasi", "Selesai"])
+            f_status = st.selectbox("Status Retur", ["Pengajuan", "Sedang Diproses", "Sukses"])
             f_tgl = st.date_input("Tanggal Input", value=datetime.date.today())
         
         submit_retur = st.form_submit_button("💾 Simpan Data Retur", type="primary")
@@ -338,7 +411,122 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: DATA SUPPLIER
+# MENU 2: LIST RETUR (DENGAN FITUR EDIT & EKSPOR PDF SESUAI SUPPLIER)
+# ==========================================
+elif menu_pilihan == "📋 List Retur":
+    st.markdown("## 📋 List Data Retur & Manajemen Edit")
+    st.markdown("<p style='margin-top: -10px;'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
+    
+    # Filter Controls
+    fl_c1, fl_c2, fl_c3 = st.columns(3)
+    with fl_c1:
+        opsi_supp_filter = ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER
+        pilih_sup_filter = st.selectbox("Filter Supplier", opsi_supp_filter)
+    with fl_c2:
+        pilih_status_filter = st.selectbox("Filter Status", ["SEMUA STATUS", "Pengajuan", "Sedang Diproses", "Sukses"])
+    with fl_c3:
+        cari_retur_input = st.text_input("🔍 Cari Data Retur (Kode / Nama / Keterangan)")
+
+    df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
+
+    if not df_retur_view.empty:
+        # Tombol Download PDF Berdasarkan Supplier yang sedang difilter
+        if pilih_sup_filter != "SEMUA SUPPLIER":
+            pdf_retur_bytes = generate_pdf_retur_supplier(df_retur_view, pilih_sup_filter)
+            st.download_button(
+                label=f"📥 Download Laporan PDF Retur — {pilih_sup_filter}",
+                data=pdf_retur_bytes,
+                file_name=f"Laporan_Retur_{pilih_sup_filter.replace(' ', '_')}_{datetime.date.today()}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        else:
+            st.info("💡 Tip: Pilih supplier tertentu pada filter di atas untuk mengaktifkan tombol download laporan PDF khusus supplier tersebut.")
+
+        st.markdown("### ✏️ Edit Data Retur")
+        st.markdown("<p style='font-size: 13px; color: gray;'>Anda dapat langsung mengubah data (Qty, HPP, Status, Keterangan, dll) di tabel bawah ini, lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
+
+        edited_df_retur = st.data_editor(
+            df_retur_view,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", disabled=True),
+                "kode": st.column_config.TextColumn("Kode Barcode/SKU"),
+                "nama": st.column_config.TextColumn("Nama Barang"),
+                "qty": st.column_config.NumberColumn("Qty", min_value=0),
+                "hpp": st.column_config.NumberColumn("HPP (Rp)", format="Rp %'d"),
+                "total": st.column_config.NumberColumn("Total (Rp)", format="Rp %'d", disabled=True),
+                "ket": st.column_config.SelectboxColumn("Keterangan", options=["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"], required=True),
+                "ed": st.column_config.TextColumn("Tanggal ED"),
+                "supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, required=True),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pengajuan", "Sedang Diproses", "Sukses"], required=True),
+                "tgl_input": st.column_config.TextColumn("Tanggal Input", disabled=True),
+            },
+            disabled=["id", "total", "tgl_input"],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_tabel_retur"
+        )
+
+        st.markdown("### 🛠️ Aksi Data Retur")
+        list_retur_ids = df_retur_view["id"].tolist()
+        selected_retur_ids = st.multiselect("Pilih ID Retur (untuk Hapus):", options=list_retur_ids, key="multiselect_retur_id")
+
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            if st.button("💾 Simpan Perubahan Data Retur", type="primary", use_container_width=True):
+                count_upd_retur = 0
+                for _, row in edited_df_retur.iterrows():
+                    orig_row = df_retur_view.loc[df_retur_view["id"] == row["id"]]
+                    if not orig_row.empty:
+                        orig = orig_row.iloc[0]
+                        new_qty = float(row["qty"])
+                        new_hpp = float(row["hpp"])
+                        new_total = new_qty * new_hpp
+                        
+                        if (
+                            str(row["kode"]) != str(orig["kode"]) or
+                            str(row["nama"]) != str(orig["nama"]) or
+                            new_qty != float(orig["qty"]) or
+                            new_hpp != float(orig["hpp"]) or
+                            str(row["ket"]) != str(orig["ket"]) or
+                            str(row["ed"]) != str(orig["ed"]) or
+                            str(row["supplier"]) != str(orig["supplier"]) or
+                            str(row["status"]) != str(orig["status"])
+                        ):
+                            supabase.table("barang_retur").update({
+                                "kode": str(row["kode"]),
+                                "nama": str(row["nama"]),
+                                "qty": int(new_qty),
+                                "hpp": float(new_hpp),
+                                "total": float(new_total),
+                                "ket": str(row["ket"]),
+                                "ed": str(row["ed"]),
+                                "supplier": str(row["supplier"]),
+                                "status": str(row["status"])
+                            }).eq("id", int(row["id"])).execute()
+                            count_upd_retur += 1
+                if count_upd_retur > 0:
+                    st.success(f"Berhasil memperbarui {count_upd_retur} data retur!")
+                    st.rerun()
+                else:
+                    st.info("Tidak ada perubahan data retur yang terdeteksi.")
+        with col_r2:
+            if st.button("🗑️ Hapus Retur Terpilih", type="secondary", use_container_width=True):
+                if not selected_retur_ids:
+                    st.warning("Pilih minimal satu ID retur yang ingin dihapus!")
+                else:
+                    for rid in selected_retur_ids:
+                        try:
+                            supabase.table("barang_retur").delete().eq("id", int(float(str(rid)))).execute()
+                        except (ValueError, TypeError):
+                            continue
+                    st.success("Data retur terpilih berhasil dihapus!")
+                    st.rerun()
+    else:
+        st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+
+# ==========================================
+# MENU 3: DATA SUPPLIER
 # ==========================================
 elif menu_pilihan == "🏢 Data Supplier":
     st.markdown("## 🏢 Manajemen Data Supplier")
@@ -380,7 +568,7 @@ elif menu_pilihan == "🏢 Data Supplier":
         cari_sup = st.text_input("🔍 Cari Supplier (Nama / Pajak / Sistem Bayar)")
     with ex_c2:
         st.markdown("<br>", unsafe_allow_html=True)
-        pilihan_filter_pdf = st.selectbox("Pilihan Ekspor PDF", ["SEMUA", "PKP", "Non-PKP"], label_visibility="collapsed")
+        pilihan_filter_pdf = st.selectbox("Pilihan Ekspor PDF Supplier", ["SEMUA", "PKP", "Non-PKP"], label_visibility="collapsed")
 
     df_supplier_view = ambil_data_supplier(cari_sup)
 
@@ -394,7 +582,7 @@ elif menu_pilihan == "🏢 Data Supplier":
 
         pdf_bytes = generate_pdf_supplier(df_pdf, pilihan_filter_pdf)
         st.download_button(
-            label=f"📥 Download Laporan PDF ({pilihan_filter_pdf})",
+            label=f"📥 Download Laporan PDF Supplier ({pilihan_filter_pdf})",
             data=pdf_bytes,
             file_name=f"Laporan_Supplier_{pilihan_filter_pdf}_{datetime.date.today()}.pdf",
             mime="application/pdf",
@@ -468,7 +656,7 @@ elif menu_pilihan == "🏢 Data Supplier":
         st.info("Belum ada data supplier yang tersimpan.")
 
 # ==========================================
-# MENU 3: HOME
+# MENU 4: HOME
 # ==========================================
 elif menu_pilihan == "🏠 Home":
     st.markdown("## 🏠 Halaman Utama Dashboard")
@@ -479,14 +667,6 @@ elif menu_pilihan == "🏠 Home":
     col_h1.metric("Total Barang Retur", f"{len(df_home)} Item")
     col_h2.metric("Total Supplier Terdaftar", f"{len(df_sup_notif)} Supplier")
     col_h3.metric("Total Nilai Retur", f"Rp {df_home['total'].sum() if not df_home.empty else 0:,.0f}")
-
-# ==========================================
-# MENU 4: LIST RETUR
-# ==========================================
-elif menu_pilihan == "📋 List Retur":
-    st.markdown("## 📋 List Data Retur")
-    df_retur_all = ambil_data_retur()
-    st.dataframe(df_retur_all, use_container_width=True)
 
 # ==========================================
 # MENU 5: LAPORAN ANALITIK

@@ -97,7 +97,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
+    elements.append(Paragraph("TORASERA NURJA BERKAH", style_title))
     elements.append(Paragraph(f"Laporan Data Supplier ({html.escape(str(jenis_filter))}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 

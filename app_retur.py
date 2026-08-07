@@ -85,14 +85,86 @@ if not df_sup_notif.empty and "jatuh_tempo" in df_sup_notif.columns:
             except Exception:
                 pass
 
+# --- FUNGSI GENERATE PDF LAPORAN SUPPLIER ---
+def generate_pdf_supplier(df_export, jenis_filter):
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=reportlab.lib.pagesizes.A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
+    elements = []
+    
+    styles = getSampleStyleSheet()
+    style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'), alignment=1, spaceAfter=6)
+    style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'), alignment=1, spaceAfter=15)
+    style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1E293B'))
+    style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
+
+    elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
+    elements.append(Paragraph(f"Laporan Data Supplier ({jenis_filter}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
+    elements.append(Spacer(1, 5*mm))
+
+    # Header Tabel PDF
+    table_data = [[
+        Paragraph("<b>No</b>", style_cell_bold),
+        Paragraph("<b>Nama Supplier</b>", style_cell_bold),
+        Paragraph("<b>Tagihan (Rp)</b>", style_cell_bold),
+        Paragraph("<b>Jenis</b>", style_cell_bold),
+        Paragraph("<b>Sistem Bayar</b>", style_cell_bold),
+        Paragraph("<b>Jatuh Tempo</b>", style_cell_bold)
+    ]]
+
+    total_tagihan_pdf = 0
+    for idx, row in df_export.iterrows():
+        tagihan_val = float(row['tagihan'])
+        total_tagihan_pdf += tagihan_val
+        table_data.append([
+            Paragraph(str(row['no_urut']), style_cell),
+            Paragraph(str(row['nama_supplier']), style_cell),
+            Paragraph(f"Rp {tagihan_val:,.0f}", style_cell),
+            Paragraph(str(row['jenis_pajak']), style_cell),
+            Paragraph(str(row['sistem_bayar']), style_cell),
+            Paragraph(str(row['jatuh_tempo']), style_cell)
+        ])
+
+    # Baris Total
+    table_data.append([
+        Paragraph("<b>TOTAL</b>", style_cell_bold),
+        Paragraph("", style_cell),
+        Paragraph(f"<b>Rp {total_tagihan_pdf:,.0f}</b>", style_cell_bold),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell),
+        Paragraph("", style_cell)
+    ])
+
+    col_widths = [15*mm, 60*mm, 35*mm, 20*mm, 25*mm, 25*mm]
+    t = Table(table_data, colWidths=col_widths)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2563EB')),
+        ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+        ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 6),
+        ('TOPPADDING', (0,0), (-1,-1), 6),
+        ('GRID', (0,0), (-1,-2), 0.5, colors.HexColor('#CBD5E1')),
+        ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#F1F5F9')),
+        ('LINEABOVE', (0,-1), (-1,-1), 1, colors.HexColor('#0F172A')),
+    ]))
+    
+    # Ubah warna teks header tabel di PDF jadi putih
+    for i in range(len(col_widths)):
+        table_data[0][i].style.textColor = colors.whitesmoke
+
+    elements.append(t)
+    doc.build(elements)
+    buffer.seek(0)
+    return buffer.getvalue()
+
+# Import reportlab module checks for A4
+import reportlab.lib.pagesizes
+
 # --- TOGGLE MODE DI SIDEBAR ---
 with st.sidebar:
     st.markdown("### 🛒 TOSERBA")
     st.markdown("<p style='font-size: 12px; margin-top: -5px;'>NURJA BERKAH<br>Belanja Lengkap, Keluarga Bahagia</p>", unsafe_allow_html=True)
     st.divider()
     
-    # Tombol Ganti Tema
-    st.markdown("🎨 **Tampilan Tema**")
     theme_choice = st.radio("Pilih Mode", ["Terang ☀️", "Gelap 🌙"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
     st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
     
@@ -164,7 +236,6 @@ DAFTAR_SUPPLIER = [
     "PT ULTRAJAYA MILK INDUSTRI & TRADING CO. TBK", "Bulog Indonesia", "UD HARIS JAYA PROBOLINGGO", "Jaya Subur",
     "PADMATIRTA", "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG", "MARGA NUSARAYA"
 ]
-DAFTAR_STATUS = ["Pengajuan", "Sedang Diverifikasi", "Sukses"]
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
     query = supabase.table("barang_retur").select("*")
@@ -255,10 +326,35 @@ if menu_pilihan == "🏢 Data Supplier":
                     st.error(f"Gagal menyimpan ke database: {e}")
 
     st.divider()
-    cari_sup = st.text_input("🔍 Cari Supplier (Nama / Pajak / Sistem Bayar)")
+    
+    # Bagian Pencarian & Opsi Ekspor PDF
+    ex_c1, ex_c2 = st.columns([2, 1])
+    with ex_c1:
+        cari_sup = st.text_input("🔍 Cari Supplier (Nama / Pajak / Sistem Bayar)")
+    with ex_c2:
+        st.markdown("<br>", unsafe_allow_html=True)
+        pilihan_filter_pdf = st.selectbox("Pilihan Ekspor PDF", ["SEMUA", "PKP", "Non-PKP"], label_visibility="collapsed")
+
     df_supplier_view = ambil_data_supplier(cari_sup)
 
     if not df_supplier_view.empty:
+        # Tombol Download PDF
+        if pilihan_filter_pdf == "PKP":
+            df_pdf = df_supplier_view[df_supplier_view["jenis_pajak"].str.upper() == "PKP"]
+        elif pilihan_filter_pdf == "Non-PKP":
+            df_pdf = df_supplier_view[df_supplier_view["jenis_pajak"].str.upper() == "NON-PKP"]
+        else:
+            df_pdf = df_supplier_view
+
+        pdf_bytes = generate_pdf_supplier(df_pdf, pilihan_filter_pdf)
+        st.download_button(
+            label=f"📥 Download Laporan PDF ({pilihan_filter_pdf})",
+            data=pdf_bytes,
+            file_name=f"Laporan_Supplier_{pilihan_filter_pdf}_{datetime.date.today()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
         edited_df_sup = st.data_editor(
             df_supplier_view,
             column_config={

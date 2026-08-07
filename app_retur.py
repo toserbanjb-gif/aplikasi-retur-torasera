@@ -9,6 +9,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from supabase import Client, create_client
+from fpdf import FPDF
 
 # --- CONFIG PAGE ---
 st.set_page_config(
@@ -215,6 +216,34 @@ def cek_barang_duplikat(supplier, kode, nama):
             return True
     return False
 
+# --- FUNGSI EXPORT PDF SUPPLIER MENGGUNAKAN FPDF ---
+def export_supplier_to_pdf(dataframe):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    
+    # Judul Laporan
+    pdf.cell(200, 10, txt="Laporan Data Supplier - Toserba Nurja Berkah", ln=True, align="C")
+    pdf.ln(10)
+    
+    # Header Tabel
+    pdf.set_font("Arial", "B", 10)
+    columns = [col for col in dataframe.columns if col != "id"]
+    col_width = 190 / len(columns)
+    
+    for col in columns:
+        pdf.cell(col_width, 8, txt=str(col).replace("_", " ").title(), border=1, align="C")
+    pdf.ln()
+    
+    # Isi Data Tabel
+    pdf.set_font("Arial", size=9)
+    for _, row in dataframe.iterrows():
+        for col in columns:
+            pdf.cell(col_width, 6, txt=str(row[col]), border=1, align="L")
+        pdf.ln()
+        
+    return pdf.output(dest='S').encode('latin1')
+
 def generate_pdf_retur(df_data, supplier_label):
     df_filtered = df_data.copy()
     df_filtered["qty"] = pd.to_numeric(df_filtered["qty"], errors="coerce").fillna(0)
@@ -395,7 +424,7 @@ def dialog_edit_barang(item_id):
             st.rerun()
 
 # --- ROUTING HALAMAN BERDASARKAN MENU SIDEBAR ---
-if menu_piliations_check := menu_pilihan == "🏢 Data Supplier":
+if menu_pilihan == "🏢 Data Supplier":
     st.markdown("## 🏢 Manajemen Data Supplier")
     st.markdown("<p style='margin-top: -10px;'>Kelola daftar nama supplier dan status pendaftaran perpajakannya (PKP / Non PKP).</p>", unsafe_allow_html=True)
     
@@ -424,26 +453,36 @@ if menu_piliations_check := menu_pilihan == "🏢 Data Supplier":
     
     df_supplier_view = ambil_data_supplier()
     if not df_supplier_view.empty:
+        # --- FITUR FILTER JENIS PENDAFTARAN (MISAL: PKP SAJA) ---
+        if "jenis_pendaftaran" in df_supplier_view.columns:
+            opsi_filter_sup = ["Semua"] + list(JENIS_PENDAFTARAN)
+            pilih_filter_sup = st.selectbox("🔍 Filter berdasarkan Jenis Pendaftaran:", opsi_filter_sup)
+            
+            if pilih_filter_sup != "Semua":
+                df_supplier_view = df_supplier_view[df_supplier_view["jenis_pendaftaran"] == pilih_filter_sup]
+
         # Tambahkan Nomor Urut
-        df_supplier_view.insert(0, "No.", range(1, len(df_supplier_view) + 1))
+        df_supplier_view["No."] = range(1, len(df_supplier_view) + 1)
+        cols = ["No."] + [col for col in df_supplier_view.columns if col != "No."]
+        df_supplier_view = df_supplier_view[cols]
         
         edited_supplier_df = st.data_editor(
             df_supplier_view,
             column_config={
                 "id": st.column_config.NumberColumn("ID Database", disabled=True),
-                "no.": st.column_config.NumberColumn("No.", disabled=True),
+                "No.": st.column_config.NumberColumn("No.", disabled=True),
                 "nama_supplier": st.column_config.TextColumn("Nama Supplier"),
                 "jenis_pendaftaran": st.column_config.SelectboxColumn("Jenis Pendaftaran", options=JENIS_PENDAFTARAN, required=True),
             },
-            disabled=["id", "no."],
+            disabled=["id", "No."],
             hide_index=True,
             use_container_width=True,
             key="editor_tabel_supplier"
         )
 
-        col_s1, col_s2 = st.columns(2)
+        col_s1, col_s2, col_s3 = st.columns(3)
         with col_s1:
-            if st.button("💾 Simpan Perubahan Tabel Supplier", type="primary", use_container_width=True):
+            if st.button("💾 Simpan Perubahan Tabel", type="primary", use_container_width=True):
                 count_updated = 0
                 for _, row in edited_supplier_df.iterrows():
                     orig_row = df_supplier_view.loc[df_supplier_view["id"] == row["id"]]
@@ -473,6 +512,17 @@ if menu_piliations_check := menu_pilihan == "🏢 Data Supplier":
                             pass
                     st.success("Supplier terpilih berhasil dihapus!")
                     st.rerun()
+        with col_s3:
+            st.markdown("<br>", unsafe_allow_html=True)
+            # --- FITUR EXPORT PDF DATA SUPPLIER ---
+            pdf_supplier_bytes = export_supplier_to_pdf(edited_supplier_df)
+            st.download_button(
+                label="📥 Download PDF Data Supplier",
+                data=pdf_supplier_bytes,
+                file_name=f"Data_Supplier_{pilih_filter_sup}.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
     else:
         st.info("Belum ada data supplier yang tersimpan.")
 
@@ -658,7 +708,7 @@ else:
         with act_col1:
             if st.button("💾 Simpan Perubahan", type="primary", use_container_width=True):
                 perubahan_tercatat = 0
-                for idx, row in edited_df.iterrows():
+                for _, row in edited_df.iterrows():
                     original_row = df_retur.loc[df_retur["id"] == row["id"]]
                     if not original_row.empty:
                         orig = original_row.iloc[0]
@@ -748,13 +798,11 @@ else:
         st.markdown("<br>", unsafe_allow_html=True)
         df_pdf_data = ambil_data_retur(filter_supplier=pdf_supplier_target) if pdf_supplier_target != "SEMUA SUPPLIER" else df_semua
         if not df_pdf_data.empty:
-            pdf_bytes = generate_pdf_retur(df_pdf_data, pdf_supplier_target)
+            pdf_buffer = generate_pdf_retur(df_pdf_data, pdf_supplier_target)
             st.download_button(
-                label="📄 Download PDF Nota Retur",
-                data=pdf_bytes,
+                label="📥 Download PDF Nota",
+                data=pdf_buffer,
                 file_name=f"Nota_Retur_{pdf_supplier_target.replace(' ', '_')}.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
-        else:
-            st.button("📄 Download PDF Kosong", disabled=True, use_container_width=True)

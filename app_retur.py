@@ -13,7 +13,7 @@ import reportlab.lib.pagesizes
 
 # --- CONFIG PAGE ---
 st.set_page_config(
-    page_title="Sistem Manajemen Retur - Toserba Nurja Berkah",
+    page_title="Sistem Manajemen Retur - Torasera Nurja Berkah",
     page_icon="📦",
     layout="wide",
 )
@@ -360,9 +360,9 @@ st.divider()
 # ==========================================
 # MENU 0: HOME / DASHBOARD
 # ==========================================
-if menu_pilihan == "🏠 Home":
-    st.markdown("## 🏠 Dashboard Utama")
-    st.markdown("<p style='margin-top: -10px;'>Ringkasan performa sistem retur barang dan total tagihan supplier Toserba Nurja Berkah.</p>", unsafe_allow_html=True)
+if menu_pilihan == "Home":
+    st.markdown("## Dashboard Utama")
+    st.markdown("<p style='margin-top: -10px;'>Ringkasan performa sistem retur barang dan total tagihan supplier Torasera Nurja Berkah.</p>", unsafe_allow_html=True)
     
     df_r_home = ambil_data_retur()
     df_s_home = ambil_data_supplier()

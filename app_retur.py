@@ -152,8 +152,8 @@ def generate_pdf_supplier(df_export, jenis_filter):
     buffer.seek(0)
     return buffer.getvalue()
 
-# --- FUNGSI GENERATE PDF LAPORAN RETUR PER SUPPLIER ---
-def generate_pdf_retur_supplier(df_export, nama_supplier):
+# --- FUNGSI GENERATE PDF LAPORAN RETUR (SUPESIFIK ATAU SEMUA) ---
+def generate_pdf_retur_custom(df_export, judul_laporan):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=reportlab.lib.pagesizes.A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
     elements = []
@@ -161,20 +161,20 @@ def generate_pdf_retur_supplier(df_export, nama_supplier):
     styles = getSampleStyleSheet()
     style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'), alignment=1, spaceAfter=4)
     style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'), alignment=1, spaceAfter=15)
-    style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8.5, textColor=colors.HexColor('#1E293B'))
-    style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8.5, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
+    style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#1E293B'))
+    style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
     elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
-    elements.append(Paragraph(f"Laporan Barang Retur — Supplier: <b>{nama_supplier}</b><br>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
+    elements.append(Paragraph(f"Laporan Barang Retur — {judul_laporan}<br>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
     table_data = [[
         Paragraph("<b>Kode</b>", style_cell_bold),
         Paragraph("<b>Nama Barang</b>", style_cell_bold),
+        Paragraph("<b>Supplier</b>", style_cell_bold),
         Paragraph("<b>Qty</b>", style_cell_bold),
         Paragraph("<b>HPP (Rp)</b>", style_cell_bold),
         Paragraph("<b>Total (Rp)</b>", style_cell_bold),
-        Paragraph("<b>Ket</b>", style_cell_bold),
         Paragraph("<b>Status</b>", style_cell_bold)
     ]]
 
@@ -188,10 +188,10 @@ def generate_pdf_retur_supplier(df_export, nama_supplier):
         table_data.append([
             Paragraph(str(row['kode']), style_cell),
             Paragraph(str(row['nama']), style_cell),
+            Paragraph(str(row['supplier']), style_cell),
             Paragraph(str(int(qty_v)), style_cell),
             Paragraph(f"{hpp_v:,.0f}", style_cell),
             Paragraph(f"{tot_v:,.0f}", style_cell),
-            Paragraph(str(row['ket']), style_cell),
             Paragraph(str(row['status']), style_cell)
         ])
 
@@ -200,12 +200,12 @@ def generate_pdf_retur_supplier(df_export, nama_supplier):
         Paragraph("", style_cell),
         Paragraph("", style_cell),
         Paragraph("", style_cell),
-        Paragraph(f"<b>Rp {total_nilai_retur:,.0f}</b>", style_cell_bold),
         Paragraph("", style_cell),
+        Paragraph(f"<b>Rp {total_nilai_retur:,.0f}</b>", style_cell_bold),
         Paragraph("", style_cell)
     ])
 
-    col_widths = [25*mm, 60*mm, 15*mm, 25*mm, 25*mm, 15*mm, 25*mm]
+    col_widths = [20*mm, 50*mm, 40*mm, 12*mm, 22*mm, 24*mm, 22*mm]
     t = Table(table_data, colWidths=col_widths)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2563EB')),
@@ -411,13 +411,12 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: LIST RETUR (DENGAN FITUR EDIT & EKSPOR PDF SESUAI SUPPLIER)
+# MENU 2: LIST RETUR (FITUR EDIT & EKSPOR PDF)
 # ==========================================
 elif menu_pilihan == "📋 List Retur":
-    st.markdown("## 📋 List Data Retur & Manajemen Edit")
-    st.markdown("<p style='margin-top: -10px;'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
+    st.markdown("## 📋 List Data Retur, Edit & Ekspor PDF")
+    st.markdown("<p style='margin-top: -10px;'>Filter data, edit langsung tabel (termasuk ubah status menjadi Pengajuan, Sedang Diproses, atau Sukses), simpan perubahan, atau download laporan PDF (Semua Supplier atau Per Supplier).</p>", unsafe_allow_html=True)
     
-    # Filter Controls
     fl_c1, fl_c2, fl_c3 = st.columns(3)
     with fl_c1:
         opsi_supp_filter = ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER
@@ -430,21 +429,18 @@ elif menu_pilihan == "📋 List Retur":
     df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
 
     if not df_retur_view.empty:
-        # Tombol Download PDF Berdasarkan Supplier yang sedang difilter
-        if pilih_sup_filter != "SEMUA SUPPLIER":
-            pdf_retur_bytes = generate_pdf_retur_supplier(df_retur_view, pilih_sup_filter)
-            st.download_button(
-                label=f"📥 Download Laporan PDF Retur — {pilih_sup_filter}",
-                data=pdf_retur_bytes,
-                file_name=f"Laporan_Retur_{pilih_sup_filter.replace(' ', '_')}_{datetime.date.today()}.pdf",
-                mime="application/pdf",
-                use_container_width=True
-            )
-        else:
-            st.info("💡 Tip: Pilih supplier tertentu pada filter di atas untuk mengaktifkan tombol download laporan PDF khusus supplier tersebut.")
+        # Tombol Download PDF (Bisa pilih Semua Supplier atau Spesifik per Supplier yang dipilih)
+        pdf_bytes = generate_pdf_retur_custom(df_retur_view, pilih_sup_filter)
+        st.download_button(
+            label=f"📥 Download Laporan PDF ({pilih_sup_filter})",
+            data=pdf_bytes,
+            file_name=f"Laporan_Retur_{pilih_sup_filter.replace(' ', '_')}_{datetime.date.today()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
 
-        st.markdown("### ✏️ Edit Data Retur")
-        st.markdown("<p style='font-size: 13px; color: gray;'>Anda dapat langsung mengubah data (Qty, HPP, Status, Keterangan, dll) di tabel bawah ini, lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
+        st.markdown("### ✏️ Edit Tabel Data Retur")
+        st.markdown("<p style='font-size: 13px; color: gray;'>Ubah langsung isi sel pada tabel di bawah ini (misal mengubah Status menjadi <b>Sukses</b> atau <b>Sedang Diproses</b>, mengubah Qty, HPP, dll), lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
 
         edited_df_retur = st.data_editor(
             df_retur_view,

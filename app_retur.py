@@ -459,7 +459,7 @@ elif menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: LIST RETUR
+# MENU 2: LIST RETUR & EDIT STATUS
 # ==========================================
 elif menu_pilihan == "📋 List Retur":
     st.markdown("## 📋 List Data Retur & Manajemen Edit")
@@ -477,6 +477,10 @@ elif menu_pilihan == "📋 List Retur":
     df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
 
     if not df_retur_view.empty:
+        # Konversi kolom tanggal ED agar aman
+        if "ed" in df_retur_view.columns:
+            df_retur_view["ed"] = pd.to_datetime(df_retur_view["ed"], errors="coerce").dt.date
+
         pdf_bytes = generate_pdf_retur_custom(df_retur_view, pilih_sup_filter)
         st.download_button(
             label=f"📥 Download Laporan PDF ({pilih_sup_filter})",
@@ -487,7 +491,7 @@ elif menu_pilihan == "📋 List Retur":
         )
 
         st.markdown("### ✏️ Edit Data Retur")
-        st.markdown("<p style='font-size: 13px; color: gray;'>Anda dapat langsung mengubah data (Qty, HPP, Status, Keterangan, dll) di tabel bawah ini, lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
+        st.markdown("<p style='font-size: 13px; color: gray;'>Ubah data pada tabel di bawah. Jika mengubah status menjadi <b>Sukses</b>, Anda akan diminta mengonfirmasi kelengkapan Qty retur.</p>", unsafe_allow_html=True)
 
         edited_df_retur = st.data_editor(
             df_retur_view,
@@ -495,11 +499,11 @@ elif menu_pilihan == "📋 List Retur":
                 "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
                 "kode": st.column_config.TextColumn("Kode Barcode/SKU", width="medium"),
                 "nama": st.column_config.TextColumn("Nama Barang", width="large"),
-                "qty": st.column_config.NumberColumn("Qty", min_value=0, width="small"),
+                "qty": st.column_config.NumberColumn("Qty", min_value=1, width="small"),
                 "hpp": st.column_config.NumberColumn("HPP (Rp)", format="Rp %'d", width="medium"),
                 "total": st.column_config.NumberColumn("Total (Rp)", format="Rp %'d", width="medium", disabled=True),
                 "ket": st.column_config.SelectboxColumn("Keterangan", options=["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"], required=True, width="small"),
-                "ed": st.column_config.TextColumn("Tanggal ED", width="small"),
+                "ed": st.column_config.DateColumn("Tanggal ED", format="YYYY-MM-DD", width="small"),
                 "supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, required=True, width="large"),
                 "status": st.column_config.SelectboxColumn("Status", options=["Pengajuan", "Sedang Diproses", "Sukses"], required=True, width="medium"),
                 "tgl_input": st.column_config.TextColumn("Tanggal Input", width="small", disabled=True),
@@ -507,8 +511,50 @@ elif menu_pilihan == "📋 List Retur":
             disabled=["id", "total", "tgl_input"],
             hide_index=True,
             use_container_width=True,
-            key="editor_tabel_retur_v2"
+            key="editor_tabel_retur_v4"
         )
+
+        # Deteksi apakah ada item yang statusnya diubah menjadi 'Sukses'
+        item_proses_sukses = []
+        for _, row in edited_df_retur.iterrows():
+            orig_row = df_retur_view.loc[df_retur_view["id"] == row["id"]]
+            if not orig_row.empty:
+                orig_status = str(orig_row.iloc[0]["status"])
+                if str(row["status"]) == "Sukses" and orig_status != "Sukses":
+                    item_proses_sukses.append(row)
+
+        # Form Konfirmasi Khusus jika ada yang diubah ke status Sukses
+        if item_proses_sukses:
+            st.warning("⚠️ **Konfirmasi Retur Sukses** Terdeteksi perubahan status ke 'Sukses'. Silakan isi rincian penerimaan retur di bawah ini:")
+            
+            detail_retur_parsial = {}
+            for item in item_proses_sukses:
+                st.write(f"**[{item['kode']}] {item['nama']}** — Total Qty Diretur: **{int(item['qty'])}**")
+                c_opt, c_qty = st.columns([2, 2])
+                with c_opt:
+                    pilihan_retur = st.radio(
+                        f"Status Pelunasan Retur (ID: {item['id']})",
+                        options=["Sepenuhnya Berhasil", "Belum Sepenuhnya"],
+                        key=f"radio_sukses_{item['id']}"
+                    )
+                
+                qty_diterima = int(item['qty'])
+                if pilihan_retur == "Belum Sepenuhnya":
+                    with c_qty:
+                        qty_diterima = st.number_input(
+                            f"Qty Berhasil Diretur (Maks {int(item['qty'])-1})",
+                            min_value=1,
+                            max_value=int(item['qty']) - 1,
+                            value=1,
+                            key=f"qty_diterima_{item['id']}"
+                        )
+                
+                detail_retur_parsial[item['id']] = {
+                    "tipe": pilihan_retur,
+                    "qty_berhasil": qty_diterima,
+                    "qty_sisa": int(item['qty']) - qty_diterima
+                }
+            st.markdown("---")
 
         st.markdown("### 🛠️ Aksi Data Retur")
         list_retur_ids = df_retur_view["id"].tolist()
@@ -518,41 +564,101 @@ elif menu_pilihan == "📋 List Retur":
         with col_r1:
             if st.button("💾 Simpan Perubahan Data Retur", type="primary", use_container_width=True):
                 count_upd_retur = 0
+                
                 for _, row in edited_df_retur.iterrows():
                     orig_row = df_retur_view.loc[df_retur_view["id"] == row["id"]]
                     if not orig_row.empty:
                         orig = orig_row.iloc[0]
+                        rid = int(row["id"])
                         new_qty = float(row["qty"])
                         new_hpp = float(row["hpp"])
-                        new_total = new_qty * new_hpp
                         
-                        if (
+                        orig_ed = str(orig["ed"]) if pd.notna(orig["ed"]) else ""
+                        new_ed = str(row["ed"]) if pd.notna(row["ed"]) else ""
+
+                        # Cek apakah ada perubahan data dasar
+                        is_changed = (
                             str(row["kode"]) != str(orig["kode"]) or
                             str(row["nama"]) != str(orig["nama"]) or
                             new_qty != float(orig["qty"]) or
                             new_hpp != float(orig["hpp"]) or
                             str(row["ket"]) != str(orig["ket"]) or
-                            str(row["ed"]) != str(orig["ed"]) or
+                            new_ed != orig_ed or
                             str(row["supplier"]) != str(orig["supplier"]) or
                             str(row["status"]) != str(orig["status"])
-                        ):
-                            supabase.table("barang_retur").update({
-                                "kode": str(row["kode"]),
-                                "nama": str(row["nama"]),
-                                "qty": int(new_qty),
-                                "hpp": float(new_hpp),
-                                "total": float(new_total),
-                                "ket": str(row["ket"]),
-                                "ed": str(row["ed"]),
-                                "supplier": str(row["supplier"]),
-                                "status": str(row["status"])
-                            }).eq("id", int(row["id"])).execute()
+                        )
+
+                        if is_changed:
+                            # Jika status berubah menjadi Sukses dan ada dalam penanganan parsial
+                            if rid in detail_retur_parsial:
+                                info_parsial = detail_retur_parsial[rid]
+                                
+                                if info_parsial["tipe"] == "Belum Sepenuhnya":
+                                    qty_sukses = info_parsial["qty_berhasil"]
+                                    qty_sisa = info_parsial["qty_sisa"]
+                                    
+                                    # 1. Update data lama menjadi status Sukses dengan Qty yang berhasil
+                                    supabase.table("barang_retur").update({
+                                        "kode": str(row["kode"]),
+                                        "nama": str(row["nama"]),
+                                        "qty": qty_sukses,
+                                        "hpp": new_hpp,
+                                        "total": qty_sukses * new_hpp,
+                                        "ket": str(row["ket"]),
+                                        "ed": new_ed,
+                                        "supplier": str(row["supplier"]),
+                                        "status": "Sukses"
+                                    }).eq("id", rid).execute()
+                                    
+                                    # 2. Buat data baru otomatis untuk sisa retur yang belum selesai (Status: Pengajuan)
+                                    supabase.table("barang_retur").insert({
+                                        "kode": str(row["kode"]),
+                                        "nama": str(row["nama"]),
+                                        "qty": qty_sisa,
+                                        "hpp": new_hpp,
+                                        "total": qty_sisa * new_hpp,
+                                        "ket": str(row["ket"]),
+                                        "ed": new_ed,
+                                        "supplier": str(row["supplier"]),
+                                        "status": "Pengajuan",
+                                        "tgl_input": str(datetime.date.today())
+                                    }).execute()
+
+                                else:
+                                    # Jika Sepenuhnya Berhasil
+                                    supabase.table("barang_retur").update({
+                                        "kode": str(row["kode"]),
+                                        "nama": str(row["nama"]),
+                                        "qty": int(new_qty),
+                                        "hpp": new_hpp,
+                                        "total": new_qty * new_hpp,
+                                        "ket": str(row["ket"]),
+                                        "ed": new_ed,
+                                        "supplier": str(row["supplier"]),
+                                        "status": "Sukses"
+                                    }).eq("id", rid).execute()
+                            else:
+                                # Update normal untuk perubahan selain status sukses parsial
+                                supabase.table("barang_retur").update({
+                                    "kode": str(row["kode"]),
+                                    "nama": str(row["nama"]),
+                                    "qty": int(new_qty),
+                                    "hpp": new_hpp,
+                                    "total": new_qty * new_hpp,
+                                    "ket": str(row["ket"]),
+                                    "ed": new_ed,
+                                    "supplier": str(row["supplier"]),
+                                    "status": str(row["status"])
+                                }).eq("id", rid).execute()
+
                             count_upd_retur += 1
+                            
                 if count_upd_retur > 0:
                     st.success(f"Berhasil memperbarui {count_upd_retur} data retur!")
                     st.rerun()
                 else:
                     st.info("Tidak ada perubahan data retur yang terdeteksi.")
+                    
         with col_r2:
             if st.button("🗑️ Hapus Retur Terpilih", type="secondary", use_container_width=True):
                 if not selected_retur_ids:
@@ -567,7 +673,6 @@ elif menu_pilihan == "📋 List Retur":
                     st.rerun()
     else:
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
-
 # ==========================================
 # MENU 3: DATA SUPPLIER
 # ==========================================

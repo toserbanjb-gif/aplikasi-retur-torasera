@@ -222,11 +222,11 @@ DAFTAR_SUPPLIER = [
     "PT MANOHARA ADIKA DISTRINDO (Deni)", "UD SRI REJEKI (Sumar)", "CV SINAR ASIA PERKASA (Valentinus)",
     "Toserba Sundra (Kaesang)", "PT PANCA PILAR (Aru)", "PT INDOMARCO ADI PRIMA", "PT KEVINDO PRATAMA PERKASA",
     "PT ARTA DWITUNGGAL ABADI (Febri)", "DC NURUL JADID", "CV Belva", "PT HARSI PANGAN UTAMA", "BORNEO",
-    "EGIZ UMKM (Ibu Riz)", "UD Mentari Jaya Putra", "AIRA", "PT KIAN RAGAM DISTRIBUTOR", "OPIK PUTRA SNACK",
+    "EGIZ UMKM (Ibu Riz)", "UD Mentari Jaya Putra", "AIRA", "PT KIAN RAGAM DISTRIBUTOR", "OPIK PUTRA SNACK", "CV PUMA UTAMA MAKMUR ARTARIA",
     "PT PRAKARSA JAYA SENTOSA", "HELLO (Memenuhi Selera Anda)", "HASAN MEJA", "PT CAMPINA ICE CREAM INDUSTRY",
     "Yakult", "PT LUKINDARI PERMATA", "PT PARIMAS BOGA RAYA", "CV NUGRAHENI KARTIKA SARI DRINGU", "AZKA BAROKAH",
     "REJEKI JAYA", "DWIKARYA INDONESIA MANDIRI", "PT GOLDEN AICE", "BERKAH HS", "PT Mitra Pharmasi Jaya",
-    "INDOWANGI PARFUM", "CV Argo Bentar Gemilang", "UD ANUGERAH JAYA PROBOLINGGO", "PT SUKANDA DJAYA",
+    "INDOWANGI PARFUM", "CV Argo Bentar Gemilang", "UD ANUGERAH JAYA PROBOLINGGO", "PT SUKANDA DJAYA", "CV KARTIKA JAYA MAKMUR",
     "PT ULTRAJAYA MILK INDUSTRI & TRADING CO. TBK", "Bulog Indonesia", "UD HARIS JAYA PROBOLINGGO", "Jaya Subur",
     "PADMATIRTA", "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG", "MARGA NUSARAYA"
 ]
@@ -284,7 +284,7 @@ with head_c2:
 st.divider()
 
 # ==========================================
-# MENU 2: INPUT RETUR
+# MENU 1: INPUT RETUR
 # ==========================================
 if menu_pilihan == "📦 Input Retur":
     st.markdown("## 📦 Input Barang Retur")
@@ -338,7 +338,7 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 4: DATA SUPPLIER
+# MENU 2: DATA SUPPLIER
 # ==========================================
 elif menu_pilihan == "🏢 Data Supplier":
     st.markdown("## 🏢 Manajemen Data Supplier")
@@ -468,7 +468,7 @@ elif menu_pilihan == "🏢 Data Supplier":
         st.info("Belum ada data supplier yang tersimpan.")
 
 # ==========================================
-# MENU LAINNYA (HOME, LIST RETUR, LAPORAN, PENGATURAN)
+# MENU 3: HOME
 # ==========================================
 elif menu_pilihan == "🏠 Home":
     st.markdown("## 🏠 Halaman Utama Dashboard")
@@ -480,11 +480,17 @@ elif menu_pilihan == "🏠 Home":
     col_h2.metric("Total Supplier Terdaftar", f"{len(df_sup_notif)} Supplier")
     col_h3.metric("Total Nilai Retur", f"Rp {df_home['total'].sum() if not df_home.empty else 0:,.0f}")
 
+# ==========================================
+# MENU 4: LIST RETUR
+# ==========================================
 elif menu_pilihan == "📋 List Retur":
     st.markdown("## 📋 List Data Retur")
     df_retur_all = ambil_data_retur()
     st.dataframe(df_retur_all, use_container_width=True)
 
+# ==========================================
+# MENU 5: LAPORAN ANALITIK
+# ==========================================
 elif menu_pilihan == "📊 Laporan":
     st.markdown("## 📊 Laporan Analitik")
     df_lap = ambil_data_retur()
@@ -497,6 +503,9 @@ elif menu_pilihan == "📊 Laporan":
     else:
         st.info("Belum ada data untuk laporan.")
 
+# ==========================================
+# MENU 6: PENGATURAN
+# ==========================================
 elif menu_pilihan == "⚙️ Pengaturan":
     st.markdown("## ⚙️ Pengaturan Sistem")
     st.write("Kelola konfigurasi aplikasi dan koneksi Supabase Anda di sini.")

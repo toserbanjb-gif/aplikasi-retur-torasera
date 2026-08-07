@@ -152,7 +152,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
     buffer.seek(0)
     return buffer.getvalue()
 
-# --- FUNGSI GENERATE PDF LAPORAN RETUR (SUPESIFIK ATAU SEMUA) ---
+# --- FUNGSI GENERATE PDF LAPORAN RETUR ---
 def generate_pdf_retur_custom(df_export, judul_laporan):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=reportlab.lib.pagesizes.A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
@@ -411,11 +411,11 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: LIST RETUR (FITUR EDIT & EKSPOR PDF)
+# MENU 2: LIST RETUR (PERBAIKAN KOLOM & EDIT TABLE)
 # ==========================================
 elif menu_pilihan == "📋 List Retur":
-    st.markdown("## 📋 List Data Retur, Edit & Ekspor PDF")
-    st.markdown("<p style='margin-top: -10px;'>Filter data, edit langsung tabel (termasuk ubah status menjadi Pengajuan, Sedang Diproses, atau Sukses), simpan perubahan, atau download laporan PDF (Semua Supplier atau Per Supplier).</p>", unsafe_allow_html=True)
+    st.markdown("## 📋 List Data Retur & Manajemen Edit")
+    st.markdown("<p style='margin-top: -10px;'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
     
     fl_c1, fl_c2, fl_c3 = st.columns(3)
     with fl_c1:
@@ -429,7 +429,6 @@ elif menu_pilihan == "📋 List Retur":
     df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
 
     if not df_retur_view.empty:
-        # Tombol Download PDF (Bisa pilih Semua Supplier atau Spesifik per Supplier yang dipilih)
         pdf_bytes = generate_pdf_retur_custom(df_retur_view, pilih_sup_filter)
         st.download_button(
             label=f"📥 Download Laporan PDF ({pilih_sup_filter})",
@@ -439,28 +438,29 @@ elif menu_pilihan == "📋 List Retur":
             use_container_width=True
         )
 
-        st.markdown("### ✏️ Edit Tabel Data Retur")
-        st.markdown("<p style='font-size: 13px; color: gray;'>Ubah langsung isi sel pada tabel di bawah ini (misal mengubah Status menjadi <b>Sukses</b> atau <b>Sedang Diproses</b>, mengubah Qty, HPP, dll), lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
+        st.markdown("### ✏️ Edit Data Retur")
+        st.markdown("<p style='font-size: 13px; color: gray;'>Anda dapat langsung mengubah data (Qty, HPP, Status, Keterangan, dll) di tabel bawah ini, lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
 
+        # Menggunakan lebar kolom eksplisit (width) agar tidak terpotong dan mudah diedit
         edited_df_retur = st.data_editor(
             df_retur_view,
             column_config={
-                "id": st.column_config.NumberColumn("ID", disabled=True),
-                "kode": st.column_config.TextColumn("Kode Barcode/SKU"),
-                "nama": st.column_config.TextColumn("Nama Barang"),
-                "qty": st.column_config.NumberColumn("Qty", min_value=0),
-                "hpp": st.column_config.NumberColumn("HPP (Rp)", format="Rp %'d"),
-                "total": st.column_config.NumberColumn("Total (Rp)", format="Rp %'d", disabled=True),
-                "ket": st.column_config.SelectboxColumn("Keterangan", options=["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"], required=True),
-                "ed": st.column_config.TextColumn("Tanggal ED"),
-                "supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, required=True),
-                "status": st.column_config.SelectboxColumn("Status", options=["Pengajuan", "Sedang Diproses", "Sukses"], required=True),
-                "tgl_input": st.column_config.TextColumn("Tanggal Input", disabled=True),
+                "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
+                "kode": st.column_config.TextColumn("Kode Barcode/SKU", width="medium"),
+                "nama": st.column_config.TextColumn("Nama Barang", width="large"),
+                "qty": st.column_config.NumberColumn("Qty", min_value=0, width="small"),
+                "hpp": st.column_config.NumberColumn("HPP (Rp)", format="Rp %'d", width="medium"),
+                "total": st.column_config.NumberColumn("Total (Rp)", format="Rp %'d", width="medium", disabled=True),
+                "ket": st.column_config.SelectboxColumn("Keterangan", options=["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"], required=True, width="small"),
+                "ed": st.column_config.TextColumn("Tanggal ED", width="small"),
+                "supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, required=True, width="large"),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pengajuan", "Sedang Diproses", "Sukses"], required=True, width="medium"),
+                "tgl_input": st.column_config.TextColumn("Tanggal Input", width="small", disabled=True),
             },
             disabled=["id", "total", "tgl_input"],
             hide_index=True,
             use_container_width=True,
-            key="editor_tabel_retur"
+            key="editor_tabel_retur_v2"
         )
 
         st.markdown("### 🛠️ Aksi Data Retur")

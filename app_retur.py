@@ -1,5 +1,6 @@
 import datetime
 from io import BytesIO
+import html
 import pandas as pd
 import streamlit as st
 import plotly.graph_objects as go
@@ -97,7 +98,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
     elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
-    elements.append(Paragraph(f"Laporan Data Supplier ({jenis_filter}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
+    elements.append(Paragraph(f"Laporan Data Supplier ({html.escape(str(jenis_filter))}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
     table_data = [[
@@ -115,10 +116,10 @@ def generate_pdf_supplier(df_export, jenis_filter):
         total_tagihan_pdf += tagihan_val
         table_data.append([
             Paragraph(str(row['no_urut']), style_cell),
-            Paragraph(str(row['nama_supplier']), style_cell),
+            Paragraph(html.escape(str(row['nama_supplier'])), style_cell),
             Paragraph(f"Rp {tagihan_val:,.0f}", style_cell),
-            Paragraph(str(row['jenis_pajak']), style_cell),
-            Paragraph(str(row['sistem_bayar']), style_cell),
+            Paragraph(html.escape(str(row['jenis_pajak'])), style_cell),
+            Paragraph(html.escape(str(row['sistem_bayar'])), style_cell),
             Paragraph(str(row['jatuh_tempo']), style_cell)
         ])
 
@@ -165,7 +166,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
     elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
-    elements.append(Paragraph(f"Laporan Barang Retur — {judul_laporan}<br>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
+    elements.append(Paragraph(f"Laporan Barang Retur — {html.escape(str(judul_laporan))}<br/>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
     table_data = [[
@@ -186,13 +187,13 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
         total_nilai_retur += tot_v
         
         table_data.append([
-            Paragraph(str(row['kode']), style_cell),
-            Paragraph(str(row['nama']), style_cell),
-            Paragraph(str(row['supplier']), style_cell),
+            Paragraph(html.escape(str(row['kode'])), style_cell),
+            Paragraph(html.escape(str(row['nama'])), style_cell),
+            Paragraph(html.escape(str(row['supplier'])), style_cell),
             Paragraph(str(int(qty_v)), style_cell),
             Paragraph(f"{hpp_v:,.0f}", style_cell),
             Paragraph(f"{tot_v:,.0f}", style_cell),
-            Paragraph(str(row['status']), style_cell)
+            Paragraph(html.escape(str(row['status'])), style_cell)
         ])
 
     table_data.append([
@@ -441,7 +442,6 @@ elif menu_pilihan == "📋 List Retur":
         st.markdown("### ✏️ Edit Data Retur")
         st.markdown("<p style='font-size: 13px; color: gray;'>Anda dapat langsung mengubah data (Qty, HPP, Status, Keterangan, dll) di tabel bawah ini, lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
 
-        # Menggunakan lebar kolom eksplisit (width) agar tidak terpotong dan mudah diedit
         edited_df_retur = st.data_editor(
             df_retur_view,
             column_config={

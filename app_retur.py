@@ -625,11 +625,12 @@ elif menu_pilihan == "📥 Input Pembelian":
                 try:
                     public_url_nota = ""
                     public_url_bayar = ""
+                    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                     
                     # Proses Upload Bukti Nota ke Supabase Storage 'bukti_pembelian'
                     if i_file_nota is not None:
                         ext_nota = i_file_nota.name.split(".")[-1]
-                        name_nota = f"nota_{int(time.time())}_{str(i_invoice).replace('/', '_')}.{ext_nota}"
+                        name_nota = f"nota_{timestamp_str}_{str(i_invoice).replace('/', '_')}.{ext_nota}"
                         supabase.storage.from_("bukti_pembelian").upload(
                             path=name_nota,
                             file=i_file_nota.getvalue(),
@@ -641,7 +642,7 @@ elif menu_pilihan == "📥 Input Pembelian":
                     # Proses Upload Bukti Pembayaran ke Supabase Storage 'bukti_pembelian'
                     if i_file_bayar is not None:
                         ext_bayar = i_file_bayar.name.split(".")[-1]
-                        name_bayar = f"bayar_{int(time.time())}_{str(i_invoice).replace('/', '_')}.{ext_bayar}"
+                        name_bayar = f"bayar_{timestamp_str}_{str(i_invoice).replace('/', '_')}.{ext_bayar}"
                         supabase.storage.from_("bukti_pembelian").upload(
                             path=name_bayar,
                             file=i_file_bayar.getvalue(),
@@ -763,7 +764,6 @@ elif menu_pilihan == "📥 Input Pembelian":
                 st.info("Tidak ada perubahan data pembelian.")
     else:
         st.info("Tidak ada data pembelian tercatat yang sesuai dengan filter.")
-
 # ==========================================
 # MENU 4: DATA SUPPLIER
 # ==========================================

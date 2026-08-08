@@ -592,58 +592,12 @@ elif menu_pilihan == "🏢 Data Supplier":
                 "no_urut": st.column_config.NumberColumn("No Urut"),
                 "nama_supplier": st.column_config.TextColumn("Nama Supplier"),
                 "tagihan": st.column_config.NumberColumn("Tagihan", format="Rp %'d"),
-                "jenis_pajak": st.column_config.SelectboxColumn("Jenis Pendaftaran", options=["Non-PKP", "PKP"], required=True),
-                "sistem_bayar": st.column_config.SelectboxColumn("Sistem Pembayaran", options=["Kredit", "Transfer"], required=True),
-                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo"),
+                "jenis_pajak": st.column_config.SelectboxColumn("Jenis Pajak", options=["PKP", "Non-PKP"], required=True),
+                "sistem_bayar": st.column_config.SelectboxColumn("Sistem Bayar", options=["Kredit", "Transfer"], required=True),
+                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", format="YYYY-MM-DD")
             },
             disabled=["id"],
             hide_index=True,
             use_container_width=True,
-            key="editor_tabel_supplier"
+            key="editor_tabel_supplier_v2"
         )
-
-        st.markdown("### 🛠️ Aksi Data Supplier")
-        list_sup_ids = df_supplier_view["id"].tolist()
-        selected_sup_ids = st.multiselect("Pilih ID Supplier (untuk Simpan Perubahan / Hapus):", options=list_sup_ids, key="multiselect_sup_id")
-
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            if st.button("💾 Simpan Perubahan Data Supplier", type="primary", use_container_width=True):
-                count_upd = 0
-                for _, row in edited_df_sup.iterrows():
-                    orig_row = df_supplier_view.loc[df_supplier_view["id"] == row["id"]]
-                    if not orig_row.empty:
-                        orig = orig_row.iloc[0]
-                        if (
-                            int(row["no_urut"]) != int(orig["no_urut"]) or
-                            str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
-                            float(row["tagihan"]) != float(orig["tagihan"]) or
-                            str(row["jenis_pajak"]) != str(orig["jenis_pajak"]) or
-                            str(row["sistem_bayar"]) != str(orig["sistem_bayar"]) or
-                            str(row["jatuh_tempo"]) != str(orig["jatuh_tempo"])
-                        ):
-                            supabase.table("data_supplier").update({
-                                "no_urut": int(row["no_urut"]),
-                                "nama_supplier": str(row["nama_supplier"]),
-                                "tagihan": float(row["tagihan"]),
-                                "jenis_pajak": str(row["jenis_pajak"]),
-                                "sistem_bayar": str(row["sistem_bayar"]),
-                                "jatuh_tempo": str(row["jatuh_tempo"])
-                            }).eq("id", int(row["id"])).execute()
-                            count_upd += 1
-                if count_upd > 0:
-                    st.success(f"Berhasil memperbarui {count_upd} data supplier!")
-                    st.rerun()
-                else:
-                    st.info("Tidak ada perubahan data supplier yang terdeteksi.")
-        with col_s2:
-            if st.button("🗑️ Hapus Supplier Terpilih", type="secondary", use_container_width=True):
-                if not selected_sup_ids:
-                    st.warning("Pilih minimal satu ID supplier untuk dihapus!")
-                else:
-                    for sid in selected_sup_ids:
-                        supabase.table("data_supplier").delete().eq("id", int(sid)).execute()
-                    st.success("Supplier terpilih berhasil dihapus!")
-                    st.rerun()
-    else:
-        st.info("Tidak ada data supplier yang ditemukan.")

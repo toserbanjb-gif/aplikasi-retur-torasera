@@ -590,7 +590,8 @@ elif menu_pilihan == "📋 List Retur":
                     st.success("Data retur terpilih berhasil dihapus!")
                     st.rerun()
     else:
-        st.info("Tidak ada data retur yang ditemukan sesuai filter.")# ==========================================
+        st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+  # ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
 elif menu_pilihan == "📥 Input Pembelian":
@@ -707,9 +708,14 @@ elif menu_pilihan == "📥 Input Pembelian":
         else:
             df_inv_view["link_bayar"] = df_inv_view["link_bayar"].fillna("")
 
+        # Tambahkan kolom checkbox 'pilih_hapus' untuk fitur hapus baris
+        if "pilih_hapus" not in df_inv_view.columns:
+            df_inv_view.insert(0, "pilih_hapus", False)
+
         edited_df_inv = st.data_editor(
             df_inv_view,
             column_config={
+                "pilih_hapus": st.column_config.CheckboxColumn("🗑️ Hapus?", default=False, width="small"),
                 "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
                 "no_invoice": st.column_config.TextColumn("No Invoice", width="medium"),
                 "nama_supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, width="large"),
@@ -717,8 +723,8 @@ elif menu_pilihan == "📥 Input Pembelian":
                 "tgl_datang": st.column_config.DateColumn("Tgl Datang", width="small"),
                 "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", width="small"),
                 "status_lunas": st.column_config.SelectboxColumn("Status", options=["Belum Lunas", "Lunas", "Sebagian"], width="small"),
-                "link_foto": st.column_config.LinkColumn("Bukti Nota", display_text="📥 Download Nota", width="medium"),
-                "link_bayar": st.column_config.LinkColumn("Bukti Bayar", display_text="📥 Download Bukti Bayar", width="medium"),
+                "link_foto": st.column_config.TextColumn("Link Nota (URL)", width="medium"),
+                "link_bayar": st.column_config.TextColumn("Link Bayar (URL)", width="medium"),
             },
             disabled=["id"],
             hide_index=True,
@@ -726,7 +732,7 @@ elif menu_pilihan == "📥 Input Pembelian":
             key="editor_tabel_pembelian"
         )
         
-        # --- GRAND TOTAL & TOMBOL SIMPAN ---
+        # --- GRAND TOTAL ---
         grand_total_nilai = edited_df_inv["total_tagihan"].sum() if "total_tagihan" in edited_df_inv.columns else 0
         
         col_gt1, col_gt2 = st.columns([2, 1])
@@ -734,34 +740,51 @@ elif menu_pilihan == "📥 Input Pembelian":
             st.metric(label="💰 Grand Total Tagihan", value=f"Rp {grand_total_nilai:,.0f}")
             
         st.markdown("")
-        if st.button("💾 Simpan Perubahan Pembelian", type="primary"):
-            count_upd_inv = 0
-            for _, row in edited_df_inv.iterrows():
-                orig_row = df_inv_view.loc[df_inv_view["id"] == row["id"]]
-                if not orig_row.empty:
-                    orig = orig_row.iloc[0]
-                    if (
-                        str(row["no_invoice"]) != str(orig["no_invoice"]) or
-                        str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
-                        float(row["total_tagihan"]) != float(orig["total_tagihan"]) or
-                        str(row["status_lunas"]) != str(orig["status_lunas"]) or
-                        str(row.get("link_foto", "")) != str(orig.get("link_foto", "")) or
-                        str(row.get("link_bayar", "")) != str(orig.get("link_bayar", ""))
-                    ):
-                        supabase.table("data_pembelian").update({
-                            "no_invoice": str(row["no_invoice"]),
-                            "nama_supplier": str(row["nama_supplier"]),
-                            "total_tagihan": float(row["total_tagihan"]),
-                            "status_lunas": str(row["status_lunas"]),
-                            "link_foto": str(row.get("link_foto", "")),
-                            "link_bayar": str(row.get("link_bayar", ""))
-                        }).eq("id", int(row["id"])).execute()
-                        count_upd_inv += 1
-            if count_upd_inv > 0:
-                st.success(f"Berhasil memperbarui {count_upd_inv} data pembelian!")
-                st.rerun()
-            else:
-                st.info("Tidak ada perubahan data pembelian.")
+        
+        # Tombol Aksi Simpan Perubahan & Hapus Data
+        b_simpan_inv, b_hapus_inv = st.columns([3, 1])
+        with b_simpan_inv:
+            if st.button("💾 Simpan Perubahan Pembelian", type="primary", use_container_width=True):
+                count_upd_inv = 0
+                for _, row in edited_df_inv.iterrows():
+                    orig_row = df_inv_view.loc[df_inv_view["id"] == row["id"]]
+                    if not orig_row.empty:
+                        orig = orig_row.iloc[0]
+                        if (
+                            str(row["no_invoice"]) != str(orig["no_invoice"]) or
+                            str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
+                            float(row["total_tagihan"]) != float(orig["total_tagihan"]) or
+                            str(row["status_lunas"]) != str(orig["status_lunas"]) or
+                            str(row.get("link_foto", "")) != str(orig.get("link_foto", "")) or
+                            str(row.get("link_bayar", "")) != str(orig.get("link_bayar", ""))
+                        ):
+                            supabase.table("data_pembelian").update({
+                                "no_invoice": str(row["no_invoice"]),
+                                "nama_supplier": str(row["nama_supplier"]),
+                                "total_tagihan": float(row["total_tagihan"]),
+                                "status_lunas": str(row["status_lunas"]),
+                                "link_foto": str(row.get("link_foto", "")),
+                                "link_bayar": str(row.get("link_bayar", ""))
+                            }).eq("id", int(row["id"])).execute()
+                            count_upd_inv += 1
+                if count_upd_inv > 0:
+                    st.success(f"Berhasil memperbarui {count_upd_inv} data pembelian!")
+                    st.rerun()
+                else:
+                    st.info("Tidak ada perubahan data pembelian.")
+                    
+        with b_hapus_inv:
+            if st.button("🗑️ Hapus Data Dipilih", type="secondary", use_container_width=True):
+                baris_terpilih = edited_df_inv[edited_df_inv["pilih_hapus"] == True]
+                if not baris_terpilih.empty:
+                    count_del_inv = 0
+                    for _, row in baris_terpilih.iterrows():
+                        supabase.table("data_pembelian").delete().eq("id", int(row["id"])).execute()
+                        count_del_inv += 1
+                    st.success(f"Berhasil menghapus {count_del_inv} data pembelian!")
+                    st.rerun()
+                else:
+                    st.warning("Centang dulu kotak 'Hapus?' pada baris yang ingin dihapus.")
     else:
         st.info("Tidak ada data pembelian tercatat yang sesuai dengan filter.")
 # ==========================================

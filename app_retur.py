@@ -590,12 +590,13 @@ elif menu_pilihan == "📋 List Retur":
                     st.success("Data retur terpilih berhasil dihapus!")
                     st.rerun()
     else:
-        st.info("Tidak ada data retur yang ditemukan sesuai filter.")# ==========================================
+        st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+# ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
 elif menu_pilihan == "📥 Input Pembelian":
     st.markdown("## 📥 Pencatatan Invoice / Pembelian Supplier")
-    st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan faktur/invoice barang masuk dari supplier beserta tanggal datang, jatuh tempo, dan status pelunasan.</p>", unsafe_allow_html=True)
+    st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan faktur/invoice barang masuk dari supplier beserta tanggal datang, jatuh tempo, status pelunasan, dan tautan bukti foto/drive.</p>", unsafe_allow_html=True)
     
     with st.form("form_input_pembelian", clear_on_submit=True):
         ic1, ic2 = st.columns(2)
@@ -607,6 +608,9 @@ elif menu_pilihan == "📥 Input Pembelian":
             i_tgl_datang = st.date_input("Tanggal Datang Barang", value=datetime.date.today())
             i_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=datetime.date.today() + datetime.timedelta(days=30))
             i_status_lunas = st.selectbox("Status Pelunasan", ["Belum Lunas", "Lunas", "Sebagian"])
+            
+        # --- INPUT LINK DRIVE / FOTO LAPORAN ---
+        i_link_foto = st.text_input("🔗 Link Google Drive / Bukti Foto Nota (Opsional)")
         
         submit_inv = st.form_submit_button("💾 Simpan Data Pembelian", type="primary")
         if submit_inv:
@@ -620,7 +624,8 @@ elif menu_pilihan == "📥 Input Pembelian":
                         "total_tagihan": float(i_tagihan),
                         "tgl_datang": str(i_tgl_datang),
                         "jatuh_tempo": str(i_jatuh_tempo),
-                        "status_lunas": str(i_status_lunas)
+                        "status_lunas": str(i_status_lunas),
+                        "link_foto": str(i_link_foto) if i_link_foto else ""
                     }
                     supabase.table("data_pembelian").insert(payload_inv).execute()
                     st.success("Data pembelian / invoice berhasil disimpan!")
@@ -649,7 +654,7 @@ elif menu_pilihan == "📥 Input Pembelian":
         tgl_mulai, tgl_selesai = rentang_tgl
         kolom_target_tgl = "tgl_datang" if filter_tgl_tipe == "Tanggal Datang" else "jatuh_tempo"
         
-        if kolom_target_tgl in df_inv_view.columns:
+        if kolom_target_tgl in df_inv_view.empty == False and kolom_target_tgl in df_inv_view.columns:
             df_inv_view[kolom_target_tgl] = pd.to_datetime(df_inv_view[kolom_target_tgl], errors="coerce").dt.date
             df_inv_view = df_inv_view[
                 (df_inv_view[kolom_target_tgl] >= tgl_mulai) & 
@@ -657,6 +662,10 @@ elif menu_pilihan == "📥 Input Pembelian":
             ]
     
     if not df_inv_view.empty:
+        # Pastikan kolom link_foto ada di dataframe tampilan jika tabel belum memilikinya
+        if "link_foto" not in df_inv_view.columns:
+            df_inv_view["link_foto"] = ""
+
         edited_df_inv = st.data_editor(
             df_inv_view,
             column_config={
@@ -667,6 +676,7 @@ elif menu_pilihan == "📥 Input Pembelian":
                 "tgl_datang": st.column_config.DateColumn("Tgl Datang", width="small"),
                 "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", width="small"),
                 "status_lunas": st.column_config.SelectboxColumn("Status", options=["Belum Lunas", "Lunas", "Sebagian"], width="small"),
+                "link_foto": st.column_config.LinkColumn("Link Bukti/Foto", display_text="🔗 Buka Link", width="medium"),
             },
             disabled=["id"],
             hide_index=True,
@@ -692,13 +702,15 @@ elif menu_pilihan == "📥 Input Pembelian":
                         str(row["no_invoice"]) != str(orig["no_invoice"]) or
                         str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
                         float(row["total_tagihan"]) != float(orig["total_tagihan"]) or
-                        str(row["status_lunas"]) != str(orig["status_lunas"])
+                        str(row["status_lunas"]) != str(orig["status_lunas"]) or
+                        str(row.get("link_foto", "")) != str(orig.get("link_foto", ""))
                     ):
                         supabase.table("data_pembelian").update({
                             "no_invoice": str(row["no_invoice"]),
                             "nama_supplier": str(row["nama_supplier"]),
                             "total_tagihan": float(row["total_tagihan"]),
-                            "status_lunas": str(row["status_lunas"])
+                            "status_lunas": str(row["status_lunas"]),
+                            "link_foto": str(row.get("link_foto", ""))
                         }).eq("id", int(row["id"])).execute()
                         count_upd_inv += 1
             if count_upd_inv > 0:

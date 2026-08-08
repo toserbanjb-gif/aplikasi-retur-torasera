@@ -591,7 +591,6 @@ elif menu_pilihan == "📋 List Retur":
                     st.rerun()
     else:
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
-
 # ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
@@ -632,8 +631,31 @@ elif menu_pilihan == "📥 Input Pembelian":
     st.divider()
     st.markdown("### 📋 Daftar Invoice & Pembelian Masuk")
     
-    cari_inv = st.text_input("🔍 Cari Pembelian (No Invoice / Nama Supplier)")
+    # --- FILTER PENCARIAN & RENTANG TANGGAL ---
+    fc_inv1, fc_inv2, fc_inv3 = st.columns(3)
+    with fc_inv1:
+        cari_inv = st.text_input("🔍 Cari (No Invoice / Nama Supplier)")
+    with fc_inv2:
+        filter_tgl_tipe = st.selectbox("Filter Berdasarkan Tanggal", ["Tanpa Filter Tanggal", "Tanggal Datang", "Jatuh Tempo"])
+    with fc_inv3:
+        if filter_tgl_tipe != "Tanpa Filter Tanggal":
+            rentang_tgl = st.date_input("Pilih Rentang Tanggal", value=(datetime.date.today() - datetime.timedelta(days=30), datetime.date.today() + datetime.timedelta(days=30)))
+        else:
+            rentang_tgl = None
+
     df_inv_view = ambil_data_pembelian(cari_inv)
+
+    # Proses filtering berdasarkan tanggal jika diaktifkan
+    if not df_inv_view.empty and filter_tgl_tipe != "Tanpa Filter Tanggal" and isinstance(rentang_tgl, tuple) and len(rentang_tgl) == 2:
+        tgl_mulai, tgl_selesai = rentang_tgl
+        kolom_target_tgl = "tgl_datang" if filter_tgl_tipe == "Tanggal Datang" else "jatuh_tempo"
+        
+        if kolom_target_tgl in df_inv_view.columns:
+            df_inv_view[kolom_target_tgl] = pd.to_datetime(df_inv_view[kolom_target_tgl], errors="coerce").dt.date
+            df_inv_view = df_inv_view[
+                (df_inv_view[kolom_target_tgl] >= tgl_mulai) & 
+                (df_inv_view[kolom_target_tgl] <= tgl_selesai)
+            ]
     
     if not df_inv_view.empty:
         edited_df_inv = st.data_editor(
@@ -677,7 +699,7 @@ elif menu_pilihan == "📥 Input Pembelian":
             else:
                 st.info("Tidak ada perubahan data pembelian.")
     else:
-        st.info("Belum ada data pembelian tercatat.")
+        st.info("Tidak ada data pembelian tercatat yang sesuai dengan filter.")
 
 # ==========================================
 # MENU 4: DATA SUPPLIER

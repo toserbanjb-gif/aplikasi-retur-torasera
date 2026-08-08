@@ -520,6 +520,55 @@ elif menu_pilihan == "📋 List Retur":
                     st.rerun()
     else:
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+        # ... (kode Anda yang lain di atas) ...
+
+# ==========================================
+# MENU 2: INPUT PEMBELIAN SUPPLIER (TAMBAHAN)
+# ==========================================
+elif menu_pilihan == "🛒 Input Pembelian Supplier":
+    st.markdown("## 🛒 Input Pembelian Supplier")
+    
+    with st.form("form_input_pembelian", clear_on_submit=True):
+        col1, col2 = st.columns(2)
+        with col1:
+            f_supplier = st.selectbox("Nama Supplier", [
+                "PT ARTABOGA (Hanif)", "PT. PANGAN LESTARI (Ratna)", "SINAR SURYA SUKSES (Adhit)",
+                "PT Borwita Citra Prima (Listin)", "PT. SINAR NIAGA SEJAHTERA (Angga)", 
+                "PT SINARMAS DISTRIBUSI NUSANTARA (Mathias)", "TRI USAHA JAYA"
+            ])
+            f_amount = st.number_input("Nominal Tagihan (Rp)", min_value=0.0, step=1000.0)
+        with col2:
+            f_tgl_datang = st.date_input("Tanggal Datang")
+            f_tgl_tempo = st.date_input("Jatuh Tempo")
+        
+        f_status = st.selectbox("Status Lunas", ["menunggu tanggal tempo", "lunas"])
+        
+        if st.form_submit_button("💾 Simpan Data Pembelian", type="primary"):
+            try:
+                data = {
+                    "supplier_name": str(f_supplier),
+                    "amount": float(f_amount),
+                    "tanggal_datang": str(f_tgl_datang),
+                    "jatuh_tempo": str(f_tgl_tempo),
+                    "status_lunas": str(f_status)
+                }
+                supabase.table("supplier_invoices").insert(data).execute()
+                st.success("Data pembelian berhasil disimpan!")
+            except Exception as e:
+                st.error(f"Gagal menyimpan data: {e}")
+
+    st.divider()
+    st.subheader("📋 Riwayat Pembelian")
+    # Memanggil fungsi ambil data dari Supabase
+    df_riwayat = ambil_data_invoice_supplier() 
+    if not df_riwayat.empty:
+        st.dataframe(df_riwayat, use_container_width=True)
+
+# ==========================================
+# MENU LAIN (INPUT RETUR, DLL)
+# ==========================================
+elif menu_pilihan == "📦 Input Retur":
+    # ... (kode lama Anda tetap di sini) ...
 
 # ==========================================
 # MENU 3: DATA SUPPLIER

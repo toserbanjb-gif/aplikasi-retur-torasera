@@ -590,13 +590,12 @@ elif menu_pilihan == "📋 List Retur":
                     st.success("Data retur terpilih berhasil dihapus!")
                     st.rerun()
     else:
-        st.info("Tidak ada data retur yang ditemukan sesuai filter.")
-# ==========================================
+        st.info("Tidak ada data retur yang ditemukan sesuai filter.")# ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
 elif menu_pilihan == "📥 Input Pembelian":
-    st.markdown("## 📥 Pencatatan Invoice / Pembelian Supplier")
-    st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan faktur/invoice barang masuk dari supplier beserta tanggal datang, jatuh tempo, status pelunasan, dan tautan bukti foto/drive.</p>", unsafe_allow_html=True)
+    st.markdown("## 📥 Pencatatan Invoice & Pembayaran Supplier")
+    st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota dan bukti pembayaran.</p>", unsafe_allow_html=True)
     
     with st.form("form_input_pembelian", clear_on_submit=True):
         ic1, ic2 = st.columns(2)
@@ -609,8 +608,14 @@ elif menu_pilihan == "📥 Input Pembelian":
             i_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=datetime.date.today() + datetime.timedelta(days=30))
             i_status_lunas = st.selectbox("Status Pelunasan", ["Belum Lunas", "Lunas", "Sebagian"])
             
-        # --- INPUT LINK DRIVE / FOTO LAPORAN ---
-        i_link_foto = st.text_input("🔗 Link Google Drive / Bukti Foto Nota (Opsional)")
+        st.markdown("---")
+        uc1, uc2 = st.columns(2)
+        with uc1:
+            # --- UPLOAD BUKTI NOTA ---
+            i_file_nota = st.file_uploader("📂 Upload Foto/File Bukti Nota (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_nota")
+        with uc2:
+            # --- UPLOAD BUKTI PEMBAYARAN ---
+            i_file_bayar = st.file_uploader("📂 Upload Foto/File Bukti Pembayaran (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_bayar")
         
         submit_inv = st.form_submit_button("💾 Simpan Data Pembelian", type="primary")
         if submit_inv:
@@ -618,6 +623,33 @@ elif menu_pilihan == "📥 Input Pembelian":
                 st.warning("Nomor invoice tidak boleh kosong!")
             else:
                 try:
+                    public_url_nota = ""
+                    public_url_bayar = ""
+                    
+                    # Proses Upload Bukti Nota ke Supabase Storage 'bukti_pembelian'
+                    if i_file_nota is not None:
+                        ext_nota = i_file_nota.name.split(".")[-1]
+                        name_nota = f"nota_{int(time.time())}_{str(i_invoice).replace('/', '_')}.{ext_nota}"
+                        supabase.storage.from_("bukti_pembelian").upload(
+                            path=name_nota,
+                            file=i_file_nota.getvalue(),
+                            file_options={"content-type": i_file_nota.type}
+                        )
+                        res_nota = supabase.storage.from_("bukti_pembelian").get_public_url(name_nota)
+                        public_url_nota = res_nota if isinstance(res_nota, str) else res_nota.get("publicUrl", "")
+
+                    # Proses Upload Bukti Pembayaran ke Supabase Storage 'bukti_pembelian'
+                    if i_file_bayar is not None:
+                        ext_bayar = i_file_bayar.name.split(".")[-1]
+                        name_bayar = f"bayar_{int(time.time())}_{str(i_invoice).replace('/', '_')}.{ext_bayar}"
+                        supabase.storage.from_("bukti_pembelian").upload(
+                            path=name_bayar,
+                            file=i_file_bayar.getvalue(),
+                            file_options={"content-type": i_file_bayar.type}
+                        )
+                        res_bayar = supabase.storage.from_("bukti_pembelian").get_public_url(name_bayar)
+                        public_url_bayar = res_bayar if isinstance(res_bayar, str) else res_bayar.get("publicUrl", "")
+
                     payload_inv = {
                         "no_invoice": str(i_invoice),
                         "nama_supplier": str(i_supplier),
@@ -625,10 +657,12 @@ elif menu_pilihan == "📥 Input Pembelian":
                         "tgl_datang": str(i_tgl_datang),
                         "jatuh_tempo": str(i_jatuh_tempo),
                         "status_lunas": str(i_status_lunas),
-                        "link_foto": str(i_link_foto) if i_link_foto else ""
+                        "link_foto": str(public_url_nota),
+                        "link_bayar": str(public_url_bayar)
                     }
                     supabase.table("data_pembelian").insert(payload_inv).execute()
-                    st.success("Data pembelian / invoice berhasil disimpan!")
+                    st.success("Data pembelian, bukti nota, dan bukti pembayaran berhasil disimpan!")
+                    st.rerun()
                 except Exception as e:
                     st.error(f"Gagal menyimpan data pembelian: {e}")
 
@@ -654,7 +688,7 @@ elif menu_pilihan == "📥 Input Pembelian":
         tgl_mulai, tgl_selesai = rentang_tgl
         kolom_target_tgl = "tgl_datang" if filter_tgl_tipe == "Tanggal Datang" else "jatuh_tempo"
         
-        if kolom_target_tgl in df_inv_view.empty == False and kolom_target_tgl in df_inv_view.columns:
+        if kolom_target_tgl in df_inv_view.columns:
             df_inv_view[kolom_target_tgl] = pd.to_datetime(df_inv_view[kolom_target_tgl], errors="coerce").dt.date
             df_inv_view = df_inv_view[
                 (df_inv_view[kolom_target_tgl] >= tgl_mulai) & 
@@ -662,9 +696,15 @@ elif menu_pilihan == "📥 Input Pembelian":
             ]
     
     if not df_inv_view.empty:
-        # Pastikan kolom link_foto ada di dataframe tampilan jika tabel belum memilikinya
         if "link_foto" not in df_inv_view.columns:
             df_inv_view["link_foto"] = ""
+        else:
+            df_inv_view["link_foto"] = df_inv_view["link_foto"].fillna("")
+            
+        if "link_bayar" not in df_inv_view.columns:
+            df_inv_view["link_bayar"] = ""
+        else:
+            df_inv_view["link_bayar"] = df_inv_view["link_bayar"].fillna("")
 
         edited_df_inv = st.data_editor(
             df_inv_view,
@@ -676,7 +716,8 @@ elif menu_pilihan == "📥 Input Pembelian":
                 "tgl_datang": st.column_config.DateColumn("Tgl Datang", width="small"),
                 "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", width="small"),
                 "status_lunas": st.column_config.SelectboxColumn("Status", options=["Belum Lunas", "Lunas", "Sebagian"], width="small"),
-                "link_foto": st.column_config.LinkColumn("Link Bukti/Foto", display_text="🔗 Buka Link", width="medium"),
+                "link_foto": st.column_config.LinkColumn("Bukti Nota", display_text="📥 Download Nota", width="medium"),
+                "link_bayar": st.column_config.LinkColumn("Bukti Bayar", display_text="📥 Download Bukti Bayar", width="medium"),
             },
             disabled=["id"],
             hide_index=True,
@@ -703,14 +744,16 @@ elif menu_pilihan == "📥 Input Pembelian":
                         str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
                         float(row["total_tagihan"]) != float(orig["total_tagihan"]) or
                         str(row["status_lunas"]) != str(orig["status_lunas"]) or
-                        str(row.get("link_foto", "")) != str(orig.get("link_foto", ""))
+                        str(row.get("link_foto", "")) != str(orig.get("link_foto", "")) or
+                        str(row.get("link_bayar", "")) != str(orig.get("link_bayar", ""))
                     ):
                         supabase.table("data_pembelian").update({
                             "no_invoice": str(row["no_invoice"]),
                             "nama_supplier": str(row["nama_supplier"]),
                             "total_tagihan": float(row["total_tagihan"]),
                             "status_lunas": str(row["status_lunas"]),
-                            "link_foto": str(row.get("link_foto", ""))
+                            "link_foto": str(row.get("link_foto", "")),
+                            "link_bayar": str(row.get("link_bayar", ""))
                         }).eq("id", int(row["id"])).execute()
                         count_upd_inv += 1
             if count_upd_inv > 0:

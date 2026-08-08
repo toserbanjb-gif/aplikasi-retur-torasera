@@ -3,6 +3,7 @@ from io import BytesIO
 import html
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 import plotly.graph_objects as go
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
@@ -66,6 +67,37 @@ def ambil_data_supplier(cari=""):
         return df
     except Exception:
         return pd.DataFrame(columns=["id", "no_urut", "nama_supplier", "tagihan", "jenis_pajak", "sistem_bayar", "jatuh_tempo"])
+
+# --- FUNGSI AMBIL DATA PEMBELIAN / INVOICE ---
+def ambil_data_pembelian(cari=""):
+    try:
+        query = supabase.table("data_pembelian").select("*")
+        response = query.execute()
+        if not response.data:
+            return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas"])
+        df = pd.DataFrame(response.data)
+        df.columns = [str(c).lower() for c in df.columns]
+        if "id" not in df.columns:
+            df["id"] = range(1, len(df) + 1)
+        
+        df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
+        df["total_tagihan"] = pd.to_numeric(df["total_tagihan"], errors="coerce").fillna(0.0).astype(float)
+        
+        if "tgl_datang" in df.columns:
+            df["tgl_datang"] = pd.to_datetime(df["tgl_datang"], errors="coerce").dt.date
+        if "jatuh_tempo" in df.columns:
+            df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
+
+        if cari:
+            kw = cari.lower()
+            df = df[
+                df["nama_supplier"].str.lower().str.contains(kw) |
+                df["no_invoice"].str.lower().str.contains(kw) |
+                df["status_lunas"].str.lower().str.contains(kw)
+            ]
+        return df
+    except Exception:
+        return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas"])
 
 # Ambil data supplier untuk cek notifikasi lonceng
 df_sup_notif = ambil_data_supplier()
@@ -240,7 +272,7 @@ with st.sidebar:
     
     menu_pilihan = st.radio(
         "Menu Utama",
-        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"]
+        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "📥 Input Pembelian", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"]
     )
     
     st.divider()
@@ -250,7 +282,7 @@ with st.sidebar:
 
 # --- CSS DINAMIS BERDASARKAN TEMA ---
 if st.session_state.theme == "Gelap":
-    st.markdown("""
+    st.markdown('''
         <style>
         .stApp { background-color: #0F172A; color: #F8FAFC; }
         [data-testid="stSidebar"] { background-color: #1E293B; padding-top: 1rem; }
@@ -260,10 +292,10 @@ if st.session_state.theme == "Gelap":
         .stButton button[kind="primary"] { background-color: #2563EB; color: white; border-radius: 8px; font-weight: 600; border: none; }
         .stButton button[kind="primary"]:hover { background-color: #1D4ED8; }
         </style>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
     plotly_template = "plotly_dark"
 else:
-    st.markdown("""
+    st.markdown('''
         <style>
         .stApp { background-color: #F8FAFC; color: #0F172A; }
         [data-testid="stSidebar"] { background-color: #0F172A; padding-top: 1rem; }
@@ -273,7 +305,7 @@ else:
         .stButton button[kind="primary"] { background-color: #2563EB; color: white; border-radius: 8px; font-weight: 600; border: none; }
         .stButton button[kind="primary"]:hover { background-color: #1D4ED8; }
         </style>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
     plotly_template = "plotly"
 
 DAFTAR_SUPPLIER = [
@@ -358,9 +390,50 @@ with head_c2:
 st.divider()
 
 # ==========================================
+# MENU 0: HOME / DASHBOARD
+# ==========================================
+if menu_pilihan == "🏠 Home":
+    st.markdown("## 📊 Dashboard Ringkasan Sistem")
+    st.markdown("<p style='margin-top: -10px;'>Selamat datang di sistem manajemen Toserba Nurja Berkah.</p>", unsafe_allow_html=True)
+    
+    df_ret_home = ambil_data_retur()
+    df_sup_home = ambil_data_supplier()
+    df_inv_home = ambil_data_pembelian()
+    
+    m1, m2, m3 = st.columns(3)
+    with m1:
+        total_retur_val = df_ret_home["total"].sum() if not df_ret_home.empty and "total" in df_ret_home.columns else 0
+        st.metric("Total Nilai Barang Retur", f"Rp {total_retur_val:,.0f}")
+    with m2:
+        total_tagihan_val = df_sup_home["tagihan"].sum() if not df_sup_home.empty and "tagihan" in df_sup_home.columns else 0
+        st.metric("Total Tagihan Supplier", f"Rp {total_tagihan_val:,.0f}")
+    with m3:
+        total_inv_val = df_inv_home["total_tagihan"].sum() if not df_inv_home.empty and "total_tagihan" in df_inv_home.columns else 0
+        st.metric("Total Invoice Pembelian", f"Rp {total_inv_val:,.0f}")
+
+    st.divider()
+    
+    col_ch1, col_ch2 = st.columns(2)
+    with col_ch1:
+        st.markdown("### 📌 Status Retur Barang")
+        if not df_ret_home.empty:
+            fig_ret = px.pie(df_ret_home, names='status', values='qty', title="Distribusi Status Retur", template=plotly_template)
+            st.plotly_chart(fig_ret, use_container_width=True)
+        else:
+            st.info("Belum ada data retur untuk divisualisasikan.")
+            
+    with col_ch2:
+        st.markdown("### 💰 Status Pelunasan Invoice")
+        if not df_inv_home.empty:
+            fig_inv = px.pie(df_inv_home, names='status_lunas', values='total_tagihan', title="Distribusi Pembelian Supplier", template=plotly_template)
+            st.plotly_chart(fig_inv, use_container_width=True)
+        else:
+            st.info("Belum ada data invoice pembelian untuk divisualisasikan.")
+
+# ==========================================
 # MENU 1: INPUT RETUR
 # ==========================================
-if menu_pilihan == "📦 Input Retur":
+elif menu_pilihan == "📦 Input Retur":
     st.markdown("## 📦 Input Barang Retur")
     st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan barang retur baru ke database sistem.</p>", unsafe_allow_html=True)
     
@@ -412,7 +485,7 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: LIST RETUR (PERBAIKAN KOLOM & EDIT TABLE)
+# MENU 2: LIST RETUR
 # ==========================================
 elif menu_pilihan == "📋 List Retur":
     st.markdown("## 📋 List Data Retur & Manajemen Edit")
@@ -440,8 +513,6 @@ elif menu_pilihan == "📋 List Retur":
         )
 
         st.markdown("### ✏️ Edit Data Retur")
-        st.markdown("<p style='font-size: 13px; color: gray;'>Anda dapat langsung mengubah data (Qty, HPP, Status, Keterangan, dll) di tabel bawah ini, lalu klik tombol Simpan Perubahan.</p>", unsafe_allow_html=True)
-
         edited_df_retur = st.data_editor(
             df_retur_view,
             column_config={
@@ -522,7 +593,97 @@ elif menu_pilihan == "📋 List Retur":
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
 
 # ==========================================
-# MENU 3: DATA SUPPLIER
+# MENU 3: INPUT PEMBELIAN / INVOICE
+# ==========================================
+elif menu_pilihan == "📥 Input Pembelian":
+    st.markdown("## 📥 Pencatatan Invoice / Pembelian Supplier")
+    st.markdown("<p style='margin-top: -10px;'>Formulir pencatatan faktur/invoice barang masuk dari supplier beserta tanggal datang, jatuh tempo, dan status pelunasan.</p>", unsafe_allow_html=True)
+    
+    with st.form("form_input_pembelian", clear_on_submit=True):
+        ic1, ic2 = st.columns(2)
+        with ic1:
+            i_invoice = st.text_input("Nomor Invoice / Faktur")
+            i_supplier = st.selectbox("Nama Supplier", DAFTAR_SUPPLIER, key="inv_sup")
+            i_tagihan = st.number_input("Total Tagihan / Nilai Faktur (Rp)", min_value=0.0, value=0.0, step=1000.0)
+        with ic2:
+            i_tgl_datang = st.date_input("Tanggal Datang Barang", value=datetime.date.today())
+            i_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=datetime.date.today() + datetime.timedelta(days=30))
+            i_status_lunas = st.selectbox("Status Pelunasan", ["Belum Lunas", "Lunas", "Sebagian"])
+        
+        submit_inv = st.form_submit_button("💾 Simpan Data Pembelian", type="primary")
+        if submit_inv:
+            if not i_invoice:
+                st.warning("Nomor invoice tidak boleh kosong!")
+            else:
+                try:
+                    payload_inv = {
+                        "no_invoice": str(i_invoice),
+                        "nama_supplier": str(i_supplier),
+                        "total_tagihan": float(i_tagihan),
+                        "tgl_datang": str(i_tgl_datang),
+                        "jatuh_tempo": str(i_jatuh_tempo),
+                        "status_lunas": str(i_status_lunas)
+                    }
+                    supabase.table("data_pembelian").insert(payload_inv).execute()
+                    st.success("Data pembelian / invoice berhasil disimpan!")
+                except Exception as e:
+                    st.error(f"Gagal menyimpan data pembelian: {e}")
+
+    st.divider()
+    st.markdown("### 📋 Daftar Invoice & Pembelian Masuk")
+    
+    cari_inv = st.text_input("🔍 Cari Pembelian (No Invoice / Nama Supplier)")
+    df_inv_view = ambil_data_pembelian(cari_inv)
+    
+    if not df_inv_view.empty:
+        edited_df_inv = st.data_editor(
+            df_inv_view,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", disabled=True),
+                "no_invoice": st.column_config.TextColumn("No Invoice"),
+                "nama_supplier": st.column_config.SelectboxColumn("Nama Supplier", options=DAFTAR_SUPPLIER),
+                "total_tagihan": st.column_config.NumberColumn("Total Tagihan", format="Rp %'d"),
+                "tgl_datang": st.column_config.DateColumn("Tgl Datang", format="YYYY-MM-DD"),
+                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", format="YYYY-MM-DD"),
+                "status_lunas": st.column_config.SelectboxColumn("Status", options=["Belum Lunas", "Lunas", "Sebagian"])
+            },
+            disabled=["id"],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_tabel_pembelian"
+        )
+        
+        if st.button("💾 Simpan Perubahan Invoice", type="primary"):
+            count_upd_inv = 0
+            for _, row in edited_df_inv.iterrows():
+                orig_row = df_inv_view.loc[df_inv_view["id"] == row["id"]]
+                if not orig_row.empty:
+                    orig = orig_row.iloc[0]
+                    if (
+                        str(row["no_invoice"]) != str(orig["no_invoice"]) or
+                        str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
+                        float(row["total_tagihan"]) != float(orig["total_tagihan"]) or
+                        str(row["status_lunas"]) != str(orig["status_lunas"])
+                    ):
+                        supabase.table("data_pembelian").update({
+                            "no_invoice": str(row["no_invoice"]),
+                            "nama_supplier": str(row["nama_supplier"]),
+                            "total_tagihan": float(row["total_tagihan"]),
+                            "tgl_datang": str(row["tgl_datang"]),
+                            "jatuh_tempo": str(row["jatuh_tempo"]),
+                            "status_lunas": str(row["status_lunas"])
+                        }).eq("id", int(row["id"])).execute()
+                        count_upd_inv += 1
+            if count_upd_inv > 0:
+                st.success(f"Berhasil memperbarui {count_upd_inv} data invoice!")
+                st.rerun()
+            else:
+                st.info("Tidak ada perubahan data invoice.")
+    else:
+        st.info("Belum ada data pembelian tercatat.")
+
+# ==========================================
+# MENU 4: DATA SUPPLIER
 # ==========================================
 elif menu_pilihan == "🏢 Data Supplier":
     st.markdown("## 🏢 Manajemen Data Supplier")
@@ -592,96 +753,66 @@ elif menu_pilihan == "🏢 Data Supplier":
                 "no_urut": st.column_config.NumberColumn("No Urut"),
                 "nama_supplier": st.column_config.TextColumn("Nama Supplier"),
                 "tagihan": st.column_config.NumberColumn("Tagihan", format="Rp %'d"),
-                "jenis_pajak": st.column_config.SelectboxColumn("Jenis Pendaftaran", options=["Non-PKP", "PKP"], required=True),
-                "sistem_bayar": st.column_config.SelectboxColumn("Sistem Pembayaran", options=["Kredit", "Transfer"], required=True),
-                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo"),
+                "jenis_pajak": st.column_config.SelectboxColumn("Jenis Pajak", options=["PKP", "Non-PKP"], required=True),
+                "sistem_bayar": st.column_config.SelectboxColumn("Sistem Bayar", options=["Kredit", "Transfer"], required=True),
+                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", format="YYYY-MM-DD")
             },
             disabled=["id"],
             hide_index=True,
             use_container_width=True,
-            key="editor_tabel_supplier"
+            key="editor_tabel_supplier_v2"
         )
-
-        st.markdown("### 🛠️ Aksi Data Supplier")
-        list_sup_ids = df_supplier_view["id"].tolist()
-        selected_sup_ids = st.multiselect("Pilih ID Supplier (untuk Simpan Perubahan / Hapus):", options=list_sup_ids, key="multiselect_sup_id")
-
-        col_s1, col_s2 = st.columns(2)
-        with col_s1:
-            if st.button("💾 Simpan Perubahan Data Supplier", type="primary", use_container_width=True):
-                count_upd = 0
-                for _, row in edited_df_sup.iterrows():
-                    orig_row = df_supplier_view.loc[df_supplier_view["id"] == row["id"]]
-                    if not orig_row.empty:
-                        orig = orig_row.iloc[0]
-                        if (
-                            int(row["no_urut"]) != int(orig["no_urut"]) or
-                            str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
-                            float(row["tagihan"]) != float(orig["tagihan"]) or
-                            str(row["jenis_pajak"]) != str(orig["jenis_pajak"]) or
-                            str(row["sistem_bayar"]) != str(orig["sistem_bayar"]) or
-                            str(row["jatuh_tempo"]) != str(orig["jatuh_tempo"])
-                        ):
-                            supabase.table("data_supplier").update({
-                                "no_urut": int(row["no_urut"]),
-                                "nama_supplier": str(row["nama_supplier"]),
-                                "tagihan": float(row["tagihan"]),
-                                "jenis_pajak": str(row["jenis_pajak"]),
-                                "sistem_bayar": str(row["sistem_bayar"]),
-                                "jatuh_tempo": str(row["jatuh_tempo"])
-                            }).eq("id", int(row["id"])).execute()
-                            count_upd += 1
-                if count_upd > 0:
-                    st.success(f"Berhasil memperbarui {count_upd} data supplier!")
-                    st.rerun()
-                else:
-                    st.info("Tidak ada perubahan data yang terdeteksi.")
-        with col_s2:
-            if st.button("🗑️ Hapus Supplier Terpilih", type="secondary", use_container_width=True):
-                if not selected_sup_ids:
-                    st.warning("Pilih minimal satu ID supplier yang ingin dihapus!")
-                else:
-                    for sid in selected_sup_ids:
-                        try:
-                            supabase.table("data_supplier").delete().eq("id", int(float(str(sid)))).execute()
-                        except (ValueError, TypeError):
-                            continue
-                    st.success("Supplier terpilih berhasil dihapus!")
-                    st.rerun()
-    else:
-        st.info("Belum ada data supplier yang tersimpan.")
+        
+        if st.button("💾 Simpan Perubahan Supplier", type="primary"):
+            count_upd_sup = 0
+            for _, row in edited_df_sup.iterrows():
+                orig_row = df_supplier_view.loc[df_supplier_view["id"] == row["id"]]
+                if not orig_row.empty:
+                    orig = orig_row.iloc[0]
+                    if (
+                        int(row["no_urut"]) != int(orig["no_urut"]) or
+                        str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
+                        float(row["tagihan"]) != float(orig["tagihan"]) or
+                        str(row["jenis_pajak"]) != str(orig["jenis_pajak"]) or
+                        str(row["sistem_bayar"]) != str(orig["sistem_bayar"]) or
+                        str(row["jatuh_tempo"]) != str(orig["jatuh_tempo"])
+                    ):
+                        supabase.table("data_supplier").update({
+                            "no_urut": int(row["no_urut"]),
+                            "nama_supplier": str(row["nama_supplier"]),
+                            "tagihan": float(row["tagihan"]),
+                            "jenis_pajak": str(row["jenis_pajak"]),
+                            "sistem_bayar": str(row["sistem_bayar"]),
+                            "jatuh_tempo": str(row["jatuh_tempo"])
+                        }).eq("id", int(row["id"])).execute()
+                        count_upd_sup += 1
+            if count_upd_sup > 0:
+                st.success(f"Berhasil memperbarui {count_upd_sup} data supplier!")
+                st.rerun()
+            else:
+                st.info("Tidak ada perubahan data supplier.")
 
 # ==========================================
-# MENU 4: HOME
-# ==========================================
-elif menu_pilihan == "🏠 Home":
-    st.markdown("## 🏠 Halaman Utama Dashboard")
-    st.markdown("Selamat datang di sistem manajemen retur dan supplier Toserba Nurja Berkah.")
-    
-    df_home = ambil_data_retur()
-    col_h1, col_h2, col_h3 = st.columns(3)
-    col_h1.metric("Total Barang Retur", f"{len(df_home)} Item")
-    col_h2.metric("Total Supplier Terdaftar", f"{len(df_sup_notif)} Supplier")
-    col_h3.metric("Total Nilai Retur", f"Rp {df_home['total'].sum() if not df_home.empty else 0:,.0f}")
-
-# ==========================================
-# MENU 5: LAPORAN ANALITIK
+# MENU 5: LAPORAN
 # ==========================================
 elif menu_pilihan == "📊 Laporan":
-    st.markdown("## 📊 Laporan Analitik")
-    df_lap = ambil_data_retur()
-    if not df_lap.empty and "tgl_input" in df_lap.columns:
-        df_chart = df_lap.groupby("tgl_input")["total"].sum().reset_index()
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_chart['tgl_input'], y=df_chart['total'], mode='lines+markers', line=dict(color="#2563EB", width=3)))
-        fig.update_layout(title="Grafik Total Nilai Retur", xaxis_title="Tanggal", yaxis_title="Total (Rp)", template=plotly_template)
-        st.plotly_chart(fig, use_container_width=True)
+    st.markdown("## 📊 Laporan & Analisis Keseluruhan")
+    st.markdown("<p style='margin-top: -10px;'>Ringkasan komprehensif seluruh aktivitas retur barang dan kewajiban tagihan.</p>", unsafe_allow_html=True)
+    
+    df_lap_retur = ambil_data_retur()
+    df_lap_sup = ambil_data_supplier()
+    
+    st.markdown("### 📈 Grafik Total Retur per Keterangan")
+    if not df_lap_retur.empty:
+        fig_ket = px.bar(df_lap_retur, x="ket", y="total", color="ket", title="Nilai Retur Berdasarkan Keterangan", template=plotly_template)
+        st.plotly_chart(fig_ket, use_container_width=True)
     else:
-        st.info("Belum ada data untuk laporan.")
+        st.info("Belum ada data retur.")
 
 # ==========================================
 # MENU 6: PENGATURAN
 # ==========================================
 elif menu_pilihan == "⚙️ Pengaturan":
     st.markdown("## ⚙️ Pengaturan Sistem")
-    st.write("Kelola konfigurasi aplikasi dan koneksi Supabase Anda di sini.")
+    st.markdown("<p style='margin-top: -10px;'>Konfigurasi akun dan preferensi aplikasi Toserba Nurja Berkah.</p>", unsafe_allow_html=True)
+    st.info("Sistem berjalan dengan koneksi database Supabase aktif.")

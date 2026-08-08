@@ -250,7 +250,7 @@ with st.sidebar:
 
 # --- CSS DINAMIS BERDASARKAN TEMA ---
 if st.session_state.theme == "Gelap":
-    st.markdown("""
+    st.markdown('''
         <style>
         .stApp { background-color: #0F172A; color: #F8FAFC; }
         [data-testid="stSidebar"] { background-color: #1E293B; padding-top: 1rem; }
@@ -260,10 +260,10 @@ if st.session_state.theme == "Gelap":
         .stButton button[kind="primary"] { background-color: #2563EB; color: white; border-radius: 8px; font-weight: 600; border: none; }
         .stButton button[kind="primary"]:hover { background-color: #1D4ED8; }
         </style>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
     plotly_template = "plotly_dark"
 else:
-    st.markdown("""
+    st.markdown('''
         <style>
         .stApp { background-color: #F8FAFC; color: #0F172A; }
         [data-testid="stSidebar"] { background-color: #0F172A; padding-top: 1rem; }
@@ -273,7 +273,7 @@ else:
         .stButton button[kind="primary"] { background-color: #2563EB; color: white; border-radius: 8px; font-weight: 600; border: none; }
         .stButton button[kind="primary"]:hover { background-color: #1D4ED8; }
         </style>
-    """, unsafe_allow_html=True)
+    ''', unsafe_allow_html=True)
     plotly_template = "plotly"
 
 DAFTAR_SUPPLIER = [
@@ -412,7 +412,7 @@ if menu_pilihan == "📦 Input Retur":
         st.info("Belum ada data retur.")
 
 # ==========================================
-# MENU 2: LIST RETUR (PERBAIKAN KOLOM & EDIT TABLE)
+# MENU 2: LIST RETUR
 # ==========================================
 elif menu_pilihan == "📋 List Retur":
     st.markdown("## 📋 List Data Retur & Manajemen Edit")
@@ -635,53 +635,15 @@ elif menu_pilihan == "🏢 Data Supplier":
                     st.success(f"Berhasil memperbarui {count_upd} data supplier!")
                     st.rerun()
                 else:
-                    st.info("Tidak ada perubahan data yang terdeteksi.")
+                    st.info("Tidak ada perubahan data supplier yang terdeteksi.")
         with col_s2:
             if st.button("🗑️ Hapus Supplier Terpilih", type="secondary", use_container_width=True):
                 if not selected_sup_ids:
-                    st.warning("Pilih minimal satu ID supplier yang ingin dihapus!")
+                    st.warning("Pilih minimal satu ID supplier untuk dihapus!")
                 else:
                     for sid in selected_sup_ids:
-                        try:
-                            supabase.table("data_supplier").delete().eq("id", int(float(str(sid)))).execute()
-                        except (ValueError, TypeError):
-                            continue
+                        supabase.table("data_supplier").delete().eq("id", int(sid)).execute()
                     st.success("Supplier terpilih berhasil dihapus!")
                     st.rerun()
     else:
-        st.info("Belum ada data supplier yang tersimpan.")
-
-# ==========================================
-# MENU 4: HOME
-# ==========================================
-elif menu_pilihan == "🏠 Home":
-    st.markdown("## 🏠 Halaman Utama Dashboard")
-    st.markdown("Selamat datang di sistem manajemen retur dan supplier Toserba Nurja Berkah.")
-    
-    df_home = ambil_data_retur()
-    col_h1, col_h2, col_h3 = st.columns(3)
-    col_h1.metric("Total Barang Retur", f"{len(df_home)} Item")
-    col_h2.metric("Total Supplier Terdaftar", f"{len(df_sup_notif)} Supplier")
-    col_h3.metric("Total Nilai Retur", f"Rp {df_home['total'].sum() if not df_home.empty else 0:,.0f}")
-
-# ==========================================
-# MENU 5: LAPORAN ANALITIK
-# ==========================================
-elif menu_pilihan == "📊 Laporan":
-    st.markdown("## 📊 Laporan Analitik")
-    df_lap = ambil_data_retur()
-    if not df_lap.empty and "tgl_input" in df_lap.columns:
-        df_chart = df_lap.groupby("tgl_input")["total"].sum().reset_index()
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=df_chart['tgl_input'], y=df_chart['total'], mode='lines+markers', line=dict(color="#2563EB", width=3)))
-        fig.update_layout(title="Grafik Total Nilai Retur", xaxis_title="Tanggal", yaxis_title="Total (Rp)", template=plotly_template)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Belum ada data untuk laporan.")
-
-# ==========================================
-# MENU 6: PENGATURAN
-# ==========================================
-elif menu_pilihan == "⚙️ Pengaturan":
-    st.markdown("## ⚙️ Pengaturan Sistem")
-    st.write("Kelola konfigurasi aplikasi dan koneksi Supabase Anda di sini.")
+        st.info("Tidak ada data supplier yang ditemukan.")

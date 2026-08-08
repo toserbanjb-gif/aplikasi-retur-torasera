@@ -590,8 +590,7 @@ elif menu_pilihan == "📋 List Retur":
                     st.success("Data retur terpilih berhasil dihapus!")
                     st.rerun()
     else:
-        st.info("Tidak ada data retur yang ditemukan sesuai filter.")
-# ==========================================
+        st.info("Tidak ada data retur yang ditemukan sesuai filter.")# ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
 elif menu_pilihan == "📥 Input Pembelian":
@@ -674,6 +673,15 @@ elif menu_pilihan == "📥 Input Pembelian":
             use_container_width=True,
             key="editor_tabel_pembelian"
         )
+        
+        # --- GRAND TOTAL & TOMBOL SIMPAN ---
+        grand_total_nilai = edited_df_inv["total_tagihan"].sum() if "total_tagihan" in edited_df_inv.columns else 0
+        
+        col_gt1, col_gt2 = st.columns([2, 1])
+        with col_gt2:
+            st.metric(label="💰 Grand Total Tagihan", value=f"Rp {grand_total_nilai:,.0f}")
+            
+        st.markdown("")
         if st.button("💾 Simpan Perubahan Pembelian", type="primary"):
             count_upd_inv = 0
             for _, row in edited_df_inv.iterrows():

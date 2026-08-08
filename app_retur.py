@@ -639,21 +639,20 @@ elif menu_pilihan == "📥 Input Pembelian":
         edited_df_inv = st.data_editor(
             df_inv_view,
             column_config={
-                "id": st.column_config.NumberColumn("ID", disabled=True),
-                "no_invoice": st.column_config.TextColumn("No Invoice"),
-                "nama_supplier": st.column_config.SelectboxColumn("Nama Supplier", options=DAFTAR_SUPPLIER),
-                "total_tagihan": st.column_config.NumberColumn("Total Tagihan", format="Rp %'d"),
-                "tgl_datang": st.column_config.DateColumn("Tgl Datang", format="YYYY-MM-DD"),
-                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", format="YYYY-MM-DD"),
-                "status_lunas": st.column_config.SelectboxColumn("Status", options=["Belum Lunas", "Lunas", "Sebagian"])
+                "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
+                "no_invoice": st.column_config.TextColumn("No Invoice", width="medium"),
+                "nama_supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, width="large"),
+                "total_tagihan": st.column_config.NumberColumn("Total Tagihan (Rp)", format="Rp %'d", width="medium"),
+                "tgl_datang": st.column_config.DateColumn("Tgl Datang", width="small"),
+                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", width="small"),
+                "status_lunas": st.column_config.SelectboxColumn("Status", options=["Belum Lunas", "Lunas", "Sebagian"], width="small"),
             },
             disabled=["id"],
             hide_index=True,
             use_container_width=True,
             key="editor_tabel_pembelian"
         )
-        
-        if st.button("💾 Simpan Perubahan Invoice", type="primary"):
+        if st.button("💾 Simpan Perubahan Pembelian", type="primary"):
             count_upd_inv = 0
             for _, row in edited_df_inv.iterrows():
                 orig_row = df_inv_view.loc[df_inv_view["id"] == row["id"]]
@@ -669,16 +668,14 @@ elif menu_pilihan == "📥 Input Pembelian":
                             "no_invoice": str(row["no_invoice"]),
                             "nama_supplier": str(row["nama_supplier"]),
                             "total_tagihan": float(row["total_tagihan"]),
-                            "tgl_datang": str(row["tgl_datang"]),
-                            "jatuh_tempo": str(row["jatuh_tempo"]),
                             "status_lunas": str(row["status_lunas"])
                         }).eq("id", int(row["id"])).execute()
                         count_upd_inv += 1
             if count_upd_inv > 0:
-                st.success(f"Berhasil memperbarui {count_upd_inv} data invoice!")
+                st.success(f"Berhasil memperbarui {count_upd_inv} data pembelian!")
                 st.rerun()
             else:
-                st.info("Tidak ada perubahan data invoice.")
+                st.info("Tidak ada perubahan data pembelian.")
     else:
         st.info("Belum ada data pembelian tercatat.")
 
@@ -686,104 +683,54 @@ elif menu_pilihan == "📥 Input Pembelian":
 # MENU 4: DATA SUPPLIER
 # ==========================================
 elif menu_pilihan == "🏢 Data Supplier":
-    st.markdown("## 🏢 Manajemen Data Supplier")
-    st.markdown("<p style='margin-top: -10px;'>Kelola informasi supplier, nomor urut, nominal tagihan, status PKP/Non-PKP, sistem pembayaran, serta tanggal jatuh tempo.</p>", unsafe_allow_html=True)
+    st.markdown("## 🏢 Manajemen Data Supplier & Tagihan")
+    st.markdown("<p style='margin-top: -10px;'>Pengelolaan informasi profil supplier, status pajak, sistem pembayaran, dan monitoring tagihan.</p>", unsafe_allow_html=True)
     
-    with st.expander("➕ Tambah Data Supplier Baru", expanded=True):
-        with st.form("form_tambah_supplier", clear_on_submit=True):
-            sc1, sc2 = st.columns(2)
-            with sc1:
-                s_nourut = st.number_input("No Urut", min_value=1, value=1)
-                s_nama = st.selectbox("Nama Supplier", DAFTAR_SUPPLIER)
-                s_tagihan = st.number_input("Total Tagihan (Rp)", min_value=0.0, value=0.0, step=1000.0)
-            with sc2:
-                s_pajak = st.selectbox("Jenis Pendaftaran", ["Non-PKP", "PKP"])
-                s_bayar = st.selectbox("Sistem Pembayaran", ["Kredit", "Transfer"])
-                s_jatuhtempo = st.date_input("Tanggal Jatuh Tempo", value=datetime.date.today() + datetime.timedelta(days=30))
-            
-            submit_sup = st.form_submit_button("💾 Simpan Supplier", type="primary")
-            if submit_sup:
-                try:
-                    payload_sup = {
-                        "no_urut": int(s_nourut),
-                        "nama_supplier": str(s_nama),
-                        "tagihan": float(s_tagihan),
-                        "jenis_pajak": str(s_pajak),
-                        "sistem_bayar": str(s_bayar),
-                        "jatuh_tempo": str(s_jatuhtempo)
-                    }
-                    supabase.table("data_supplier").insert(payload_sup).execute()
-                    st.success("Data supplier berhasil disimpan!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Gagal menyimpan ke database: {e}")
-
-    st.divider()
+    cari_sup = st.text_input("🔍 Cari Supplier (Nama / Jenis Pajak / Sistem Bayar)")
+    df_sup_view = ambil_data_supplier(cari_sup)
     
-    ex_c1, ex_c2 = st.columns([2, 1])
-    with ex_c1:
-        cari_sup = st.text_input("🔍 Cari Supplier (Nama / Pajak / Sistem Bayar)")
-    with ex_c2:
-        st.markdown("<br>", unsafe_allow_html=True)
-        pilihan_filter_pdf = st.selectbox("Pilihan Ekspor PDF Supplier", ["SEMUA", "PKP", "Non-PKP"], label_visibility="collapsed")
-
-    df_supplier_view = ambil_data_supplier(cari_sup)
-
-    if not df_supplier_view.empty:
-        if pilihan_filter_pdf == "PKP":
-            df_pdf = df_supplier_view[df_supplier_view["jenis_pajak"].str.upper() == "PKP"]
-        elif pilihan_filter_pdf == "Non-PKP":
-            df_pdf = df_supplier_view[df_supplier_view["jenis_pajak"].str.upper() == "NON-PKP"]
-        else:
-            df_pdf = df_supplier_view
-
-        pdf_bytes = generate_pdf_supplier(df_pdf, pilihan_filter_pdf)
+    if not df_sup_view.empty:
+        pdf_sup_bytes = generate_pdf_supplier(df_sup_view, "Semua Supplier Aktif")
         st.download_button(
-            label=f"📥 Download Laporan PDF Supplier ({pilihan_filter_pdf})",
-            data=pdf_bytes,
-            file_name=f"Laporan_Supplier_{pilihan_filter_pdf}_{datetime.date.today()}.pdf",
+            label="📥 Download Laporan PDF Data Supplier",
+            data=pdf_sup_bytes,
+            file_name=f"Laporan_Supplier_{datetime.date.today()}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
 
         edited_df_sup = st.data_editor(
-            df_supplier_view,
+            df_sup_view,
             column_config={
-                "id": st.column_config.NumberColumn("ID", disabled=True),
-                "no_urut": st.column_config.NumberColumn("No Urut"),
-                "nama_supplier": st.column_config.TextColumn("Nama Supplier"),
-                "tagihan": st.column_config.NumberColumn("Tagihan", format="Rp %'d"),
-                "jenis_pajak": st.column_config.SelectboxColumn("Jenis Pajak", options=["PKP", "Non-PKP"], required=True),
-                "sistem_bayar": st.column_config.SelectboxColumn("Sistem Bayar", options=["Kredit", "Transfer"], required=True),
-                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", format="YYYY-MM-DD")
+                "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
+                "no_urut": st.column_config.NumberColumn("No Urut", width="small"),
+                "nama_supplier": st.column_config.TextColumn("Nama Supplier", width="large"),
+                "tagihan": st.column_config.NumberColumn("Tagihan (Rp)", format="Rp %'d", width="medium"),
+                "jenis_pajak": st.column_config.TextColumn("Jenis Pajak", width="small"),
+                "sistem_bayar": st.column_config.TextColumn("Sistem Bayar", width="medium"),
+                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", width="medium"),
             },
             disabled=["id"],
             hide_index=True,
             use_container_width=True,
-            key="editor_tabel_supplier_v2"
+            key="editor_tabel_supplier"
         )
         
         if st.button("💾 Simpan Perubahan Supplier", type="primary"):
             count_upd_sup = 0
             for _, row in edited_df_sup.iterrows():
-                orig_row = df_supplier_view.loc[df_supplier_view["id"] == row["id"]]
+                orig_row = df_sup_view.loc[df_sup_view["id"] == row["id"]]
                 if not orig_row.empty:
                     orig = orig_row.iloc[0]
                     if (
-                        int(row["no_urut"]) != int(orig["no_urut"]) or
                         str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
                         float(row["tagihan"]) != float(orig["tagihan"]) or
-                        str(row["jenis_pajak"]) != str(orig["jenis_pajak"]) or
-                        str(row["sistem_bayar"]) != str(orig["sistem_bayar"]) or
-                        str(row["jatuh_tempo"]) != str(orig["jatuh_tempo"])
+                        str(row["sistem_bayar"]) != str(orig["sistem_bayar"])
                     ):
                         supabase.table("data_supplier").update({
-                            "no_urut": int(row["no_urut"]),
                             "nama_supplier": str(row["nama_supplier"]),
                             "tagihan": float(row["tagihan"]),
-                            "jenis_pajak": str(row["jenis_pajak"]),
-                            "sistem_bayar": str(row["sistem_bayar"]),
-                            "jatuh_tempo": str(row["jatuh_tempo"])
+                            "sistem_bayar": str(row["sistem_bayar"])
                         }).eq("id", int(row["id"])).execute()
                         count_upd_sup += 1
             if count_upd_sup > 0:
@@ -791,28 +738,54 @@ elif menu_pilihan == "🏢 Data Supplier":
                 st.rerun()
             else:
                 st.info("Tidak ada perubahan data supplier.")
+    else:
+        st.info("Belum ada data supplier.")
 
 # ==========================================
 # MENU 5: LAPORAN
 # ==========================================
 elif menu_pilihan == "📊 Laporan":
-    st.markdown("## 📊 Laporan & Analisis Keseluruhan")
-    st.markdown("<p style='margin-top: -10px;'>Ringkasan komprehensif seluruh aktivitas retur barang dan kewajiban tagihan.</p>", unsafe_allow_html=True)
+    st.markdown("## 📊 Pusat Laporan & Analisis Data")
+    st.markdown("<p style='margin-top: -10px;'>Analisis visual mendalam terkait performa retur, akumulasi tagihan supplier, dan tren pembelian.</p>", unsafe_allow_html=True)
     
     df_lap_retur = ambil_data_retur()
     df_lap_sup = ambil_data_supplier()
     
-    st.markdown("### 📈 Grafik Total Retur per Keterangan")
-    if not df_lap_retur.empty:
-        fig_ket = px.bar(df_lap_retur, x="ket", y="total", color="ket", title="Nilai Retur Berdasarkan Keterangan", template=plotly_template)
-        st.plotly_chart(fig_ket, use_container_width=True)
-    else:
-        st.info("Belum ada data retur.")
+    tab_l1, tab_l2 = st.tabs(["📈 Analisis Retur", "💼 Analisis Tagihan Supplier"])
+    
+    with tab_l1:
+        st.markdown("### Top Supplier Berdasarkan Nilai Retur")
+        if not df_lap_retur.empty and "total" in df_lap_retur.columns:
+            df_grouped_retur = df_lap_retur.groupby("supplier")["total"].sum().reset_index().sort_values(by="total", ascending=False).head(10)
+            fig_bar_ret = px.bar(df_grouped_retur, x="supplier", y="total", title="10 Supplier dengan Nilai Retur Terbesar", text_auto=",", template=plotly_template)
+            st.plotly_chart(fig_bar_ret, use_container_width=True)
+        else:
+            st.info("Data retur belum mencukupi.")
+            
+    with tab_l2:
+        st.markdown("### Top Supplier Berdasarkan Tagihan Terbesar")
+        if not df_lap_sup.empty and "tagihan" in df_lap_sup.columns:
+            df_grouped_sup = df_lap_sup.sort_values(by="tagihan", ascending=False).head(10)
+            fig_bar_sup = px.bar(df_grouped_sup, x="nama_supplier", y="tagihan", title="10 Supplier dengan Tagihan Tertinggi", text_auto=",", template=plotly_template)
+            st.plotly_chart(fig_bar_sup, use_container_width=True)
+        else:
+            st.info("Data supplier belum mencukupi.")
 
 # ==========================================
 # MENU 6: PENGATURAN
 # ==========================================
 elif menu_pilihan == "⚙️ Pengaturan":
     st.markdown("## ⚙️ Pengaturan Sistem")
-    st.markdown("<p style='margin-top: -10px;'>Konfigurasi akun dan preferensi aplikasi Toserba Nurja Berkah.</p>", unsafe_allow_html=True)
-    st.info("Sistem berjalan dengan koneksi database Supabase aktif.")
+    st.markdown("<p style='margin-top: -10px;'>Konfigurasi akun, informasi toko, dan preferensi aplikasi.</p>", unsafe_allow_html=True)
+    
+    st.markdown("### 🏢 Profil Toko")
+    st.text_input("Nama Toko", value="Toserba Nurja Berkah", disabled=True)
+    st.text_input("Lokasi / Alamat", value="Probolinggo, Jawa Timur", disabled=True)
+    st.text_input("Sistem Versi", value="v2.5.0 Production", disabled=True)
+    
+    st.divider()
+    st.markdown("### 🎨 Preferensi Tampilan")
+    mode_setting = st.selectbox("Pilih Tema Utama", ["Terang ☀️", "Gelap 🌙"], index=0 if st.session_state.theme == "Terang" else 1)
+    if st.button("Terapkan Tema", type="primary"):
+        st.session_state.theme = "Terang" if "Terang" in mode_setting else "Gelap"
+        st.success("Tema berhasil diperbarui! Silakan refresh halaman jika diperlukan.")

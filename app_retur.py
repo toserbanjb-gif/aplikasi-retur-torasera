@@ -4,7 +4,6 @@ import html
 import pandas as pd
 import streamlit as st
 import plotly.express as px
-import plotly.graph_objects as go
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
@@ -15,7 +14,7 @@ import reportlab.lib.pagesizes
 # --- CONFIG PAGE ---
 st.set_page_config(
     page_title="Sistem Manajemen Retur - Toserba Nurja Berkah",
-    page_icon="📦",
+    page_icon="",
     layout="wide",
 )
 
@@ -128,7 +127,7 @@ def ambil_data_pembelian(cari=""):
     except Exception:
         return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas"])
 
-# Ambil data supplier untuk cek notifikasi lonceng
+# Ambil data supplier untuk cek notifikasi
 df_sup_notif = ambil_data_supplier()
 notif_jatuh_tempo = []
 hari_ini = datetime.date.today()
@@ -140,9 +139,9 @@ if not df_sup_notif.empty and "jatuh_tempo" in df_sup_notif.columns:
             try:
                 selisih = (tgl_jt - hari_ini).days
                 if selisih < 0:
-                    notif_jatuh_tempo.append(f"🔴 **{row['nama_supplier']}** sudah **JATUH TEMPO** sejak {abs(selisih)} hari lalu!")
+                    notif_jatuh_tempo.append(f"{row['nama_supplier']} sudah jatuh tempo sejak {abs(selisih)} hari lalu.")
                 elif selisih <= 3:
-                    notif_jatuh_tempo.append(f"🟡 **{row['nama_supplier']}** jatuh tempo dalam **{selisih} hari** ({tgl_jt}).")
+                    notif_jatuh_tempo.append(f"{row['nama_supplier']} jatuh tempo dalam {selisih} hari ({tgl_jt}).")
             except Exception:
                 pass
 
@@ -286,18 +285,18 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 with st.sidebar:
     st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:48px;height:48px;background:#2563EB;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
     st.divider()
-    theme_choice = st.radio("Pilih Mode", ["Terang ☀️", "Gelap 🌙"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
+    theme_choice = st.radio("Pilih Mode", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
     st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
     st.divider()
-    st.markdown("### Menu")
+    st.markdown("Menu")
     menu_pilihan = st.radio(
         "",
-        ["🏠 Home", "📦 Input Retur", "📋 List Retur", "📥 Input Pembelian", "🏢 Data Supplier", "📊 Laporan", "⚙️ Pengaturan"],
+        ["Home", "Input Retur", "List Retur", "Input Pembelian", "Data Supplier", "Laporan", "Pengaturan"],
         index=0
     )
     st.divider()
-    st.markdown("👤 **Admin Gudang**")
-    if st.button("🚪 Keluar Sistem", use_container_width=True):
+    st.markdown("Admin Gudang")
+    if st.button("Keluar Sistem", use_container_width=True):
         st.info("Sistem terkunci.")
     st.markdown("<div class='small-muted' style='margin-top:8px'>Tips: Gunakan fitur 'Download' untuk simpan laporan PDF.</div>", unsafe_allow_html=True)
 
@@ -355,24 +354,24 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
         ]
     return df
 
-@st.dialog("🔔 Peringatan Jatuh Tempo Supplier")
+@st.dialog("Peringatan Jatuh Tempo Supplier")
 def dialog_notifikasi_jatuh_tempo():
-    st.markdown("### Daftar Peringatan Jatuh Tempo")
+    st.markdown("Daftar Peringatan Jatuh Tempo")
     if not notif_jatuh_tempo:
         st.success("Tidak ada tagihan supplier yang mendekati atau melewati jatuh tempo.")
     else:
         for n in notif_jatuh_tempo:
             st.markdown(f"- {n}")
     if st.button("Tutup", use_container_width=True, type="primary"):
-        st.rerun()
+        st.experimental_rerun()
 
 # --- HEADER ---
 head_c1, head_c2 = st.columns([10, 1])
 with head_c1:
-    st.markdown("<div class='app-header'><div><h1 class='app-title'>🏢 Sistem Manajemen Retur & Supplier</h1><div class='app-sub'>Toserba Nurja Berkah — Kelola retur, tagihan, dan laporan dengan mudah</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div class='app-header'><div><h1 class='app-title'>Sistem Manajemen Retur & Supplier</h1><div class='app-sub'>Toserba Nurja Berkah — Kelola retur, tagihan, dan laporan</div></div></div>", unsafe_allow_html=True)
 with head_c2:
     jml_notif = len(notif_jatuh_tempo)
-    label_lonceng = f"🔔 {jml_notif}" if jml_notif > 0 else "🔔"
+    label_lonceng = f"Notifikasi ({jml_notif})" if jml_notif > 0 else "Notifikasi"
     if st.button(label_lonceng, help="Cek Peringatan Jatuh Tempo"):
         dialog_notifikasi_jatuh_tempo()
 
@@ -381,8 +380,8 @@ st.divider()
 # ==========================================
 # MENU 0: HOME / DASHBOARD
 # ==========================================
-if menu_pilihan == "🏠 Home":
-    st.markdown("## 📊 Dashboard Ringkasan Sistem")
+if menu_pilihan == "Home":
+    st.markdown("Dashboard Ringkasan Sistem")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Selamat datang — ringkasan cepat sistem dan indikator utama.</p>", unsafe_allow_html=True)
     
     df_ret_home = ambil_data_retur()
@@ -393,19 +392,19 @@ if menu_pilihan == "🏠 Home":
     col1, col2, col3 = st.columns(3)
     with col1:
         total_retur_val = df_ret_home["total"].sum() if not df_ret_home.empty and "total" in df_ret_home.columns else 0
-        st.markdown(f"<div class='metric-card'><div class='card-title'>📦 Total Nilai Barang Retur</div><div style='font-size:18px;font-weight:700'>{format_rp(total_retur_val)}</div><div class='small-muted'>Periode: Semua</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='card-title'>Total Nilai Barang Retur</div><div style='font-size:18px;font-weight:700'>{format_rp(total_retur_val)}</div><div class='small-muted'>Periode: Semua</div></div>", unsafe_allow_html=True)
     with col2:
         total_tagihan_val = df_sup_home["tagihan"].sum() if not df_sup_home.empty and "tagihan" in df_sup_home.columns else 0
-        st.markdown(f"<div class='metric-card'><div class='card-title'>💳 Total Tagihan Supplier</div><div style='font-size:18px;font-weight:700'>{format_rp(total_tagihan_val)}</div><div class='small-muted'>Segera cek jatuh tempo</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='card-title'>Total Tagihan Supplier</div><div style='font-size:18px;font-weight:700'>{format_rp(total_tagihan_val)}</div><div class='small-muted'>Segera cek jatuh tempo</div></div>", unsafe_allow_html=True)
     with col3:
         total_inv_val = df_inv_home["total_tagihan"].sum() if not df_inv_home.empty and "total_tagihan" in df_inv_home.columns else 0
-        st.markdown(f"<div class='metric-card'><div class='card-title'>📑 Total Invoice Pembelian</div><div style='font-size:18px;font-weight:700'>{format_rp(total_inv_val)}</div><div class='small-muted'>Data transaksi masuk</div></div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='metric-card'><div class='card-title'>Total Invoice Pembelian</div><div style='font-size:18px;font-weight:700'>{format_rp(total_inv_val)}</div><div class='small-muted'>Data transaksi masuk</div></div>", unsafe_allow_html=True)
 
     st.divider()
     
     col_ch1, col_ch2 = st.columns(2)
     with col_ch1:
-        st.markdown("### 📌 Status Retur Barang")
+        st.markdown("Status Retur Barang")
         if not df_ret_home.empty:
             fig_ret = px.pie(df_ret_home, names='status', values='qty', title="Distribusi Status Retur", template=plotly_template)
             fig_ret.update_layout(margin=dict(t=40,b=10,l=10,r=10))
@@ -414,7 +413,7 @@ if menu_pilihan == "🏠 Home":
             st.info("Belum ada data retur untuk divisualisasikan.")
             
     with col_ch2:
-        st.markdown("### 💰 Status Pelunasan Invoice")
+        st.markdown("Status Pelunasan Invoice")
         if not df_inv_home.empty:
             fig_inv = px.pie(df_inv_home, names='status_lunas', values='total_tagihan', title="Distribusi Pembelian Supplier", template=plotly_template)
             fig_inv.update_layout(margin=dict(t=40,b=10,l=10,r=10))
@@ -425,8 +424,8 @@ if menu_pilihan == "🏠 Home":
 # ==========================================
 # MENU 1: INPUT RETUR
 # ==========================================
-elif menu_pilihan == "📦 Input Retur":
-    st.markdown("## 📦 Input Barang Retur")
+elif menu_pilihan == "Input Retur":
+    st.markdown("Input Barang Retur")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan barang retur baru ke database sistem.</p>", unsafe_allow_html=True)
     
     with st.form("form_input_retur", clear_on_submit=True):
@@ -444,7 +443,7 @@ elif menu_pilihan == "📦 Input Retur":
             f_status = st.selectbox("Status Retur", ["Pengajuan", "Sedang Diproses", "Sukses"])
             f_tgl = st.date_input("Tanggal Input", value=datetime.date.today())
         
-        submit_retur = st.form_submit_button("💾 Simpan Data Retur", type="primary")
+        submit_retur = st.form_submit_button("Simpan Data Retur", type="primary")
         if submit_retur:
             if not f_nama:
                 st.warning("Nama barang tidak boleh kosong!")
@@ -469,7 +468,7 @@ elif menu_pilihan == "📦 Input Retur":
                     st.error(f"Gagal menyimpan data retur: {e}")
 
     st.divider()
-    st.markdown("### 📋 Riwayat Retur Terbaru")
+    st.markdown("Riwayat Retur Terbaru")
     df_history = ambil_data_retur()
     if not df_history.empty:
         st.dataframe(df_history.tail(10).reset_index(drop=True), use_container_width=True, hide_index=True)
@@ -479,8 +478,8 @@ elif menu_pilihan == "📦 Input Retur":
 # ==========================================
 # MENU 2: LIST RETUR
 # ==========================================
-elif menu_pilihan == "📋 List Retur":
-    st.markdown("## 📋 List Data Retur & Manajemen Edit")
+elif menu_pilihan == "List Retur":
+    st.markdown("List Data Retur & Manajemen Edit")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
     
     fl_c1, fl_c2, fl_c3 = st.columns(3)
@@ -490,7 +489,7 @@ elif menu_pilihan == "📋 List Retur":
     with fl_c2:
         pilih_status_filter = st.selectbox("Filter Status", ["SEMUA STATUS", "Pengajuan", "Sedang Diproses", "Sukses"])
     with fl_c3:
-        cari_retur_input = st.text_input("🔍 Cari Data Retur (Kode / Nama / Keterangan)")
+        cari_retur_input = st.text_input("Cari Data Retur (Kode / Nama / Keterangan)")
 
     df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
 
@@ -498,14 +497,14 @@ elif menu_pilihan == "📋 List Retur":
         safe_name = pilih_sup_filter.replace(" ", "_").replace("/", "_")
         pdf_bytes = generate_pdf_retur_custom(df_retur_view, pilih_sup_filter)
         st.download_button(
-            label=f"📥 Download Laporan PDF ({pilih_sup_filter})",
+            label=f"Download Laporan PDF ({pilih_sup_filter})",
             data=pdf_bytes,
             file_name=f"Laporan_Retur_{safe_name}_{datetime.date.today()}.pdf",
             mime="application/pdf",
             use_container_width=True
         )
 
-        st.markdown("### ✏️ Edit Data Retur")
+        st.markdown("Edit Data Retur")
         edited_df_retur = st.data_editor(
             df_retur_view,
             column_config={
@@ -527,13 +526,13 @@ elif menu_pilihan == "📋 List Retur":
             key="editor_tabel_retur_v2"
         )
 
-        st.markdown("### 🛠️ Aksi Data Retur")
+        st.markdown("Aksi Data Retur")
         list_retur_ids = df_retur_view["id"].tolist()
         selected_retur_ids = st.multiselect("Pilih ID Retur (untuk Hapus):", options=list_retur_ids, key="multiselect_retur_id")
 
         col_r1, col_r2 = st.columns(2)
         with col_r1:
-            if st.button("💾 Simpan Perubahan Data Retur", type="primary", use_container_width=True):
+            if st.button("Simpan Perubahan Data Retur", type="primary", use_container_width=True):
                 count_upd_retur = 0
                 for _, row in edited_df_retur.iterrows():
                     orig_row = df_retur_view.loc[df_retur_view["id"] == row["id"]]
@@ -571,7 +570,7 @@ elif menu_pilihan == "📋 List Retur":
                 else:
                     st.info("Tidak ada perubahan data retur yang terdeteksi.")
         with col_r2:
-            if st.button("🗑️ Hapus Retur Terpilih", type="secondary", use_container_width=True):
+            if st.button("Hapus Retur Terpilih", type="secondary", use_container_width=True):
                 if not selected_retur_ids:
                     st.warning("Pilih minimal satu ID retur yang ingin dihapus!")
                 else:
@@ -588,12 +587,12 @@ elif menu_pilihan == "📋 List Retur":
 # ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
-elif menu_pilihan == "📥 Input Pembelian":
-    st.markdown("## 📥 Pencatatan & Manajemen Invoice Supplier")
+elif menu_pilihan == "Input Pembelian":
+    st.markdown("Pencatatan & Manajemen Invoice Supplier")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota dan bukti pembayaran.</p>", unsafe_allow_html=True)
     
     df_inv_view = ambil_data_pembelian("")
-    tab_tambah, tab_edit = st.tabs(["➕ Tambah Pembelian Baru", "✏️ Edit / Hapus Pembelian"])
+    tab_tambah, tab_edit = st.tabs(["Tambah Pembelian Baru", "Edit / Hapus Pembelian"])
     
     with tab_tambah:
         with st.form("form_input_pembelian", clear_on_submit=True):
@@ -610,11 +609,11 @@ elif menu_pilihan == "📥 Input Pembelian":
             st.markdown("---")
             uc1, uc2 = st.columns(2)
             with uc1:
-                i_file_nota = st.file_uploader("📂 Upload Foto/File Bukti Nota (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_nota")
+                i_file_nota = st.file_uploader("Upload Foto/File Bukti Nota (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_nota")
             with uc2:
-                i_file_bayar = st.file_uploader("📂 Upload Foto/File Bukti Pembayaran (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_bayar")
+                i_file_bayar = st.file_uploader("Upload Foto/File Bukti Pembayaran (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_bayar")
             
-            submit_inv = st.form_submit_button("💾 Simpan Data Pembelian", type="primary")
+            submit_inv = st.form_submit_button("Simpan Data Pembelian", type="primary")
             if submit_inv:
                 if not i_invoice:
                     st.warning("Nomor invoice tidak boleh kosong!")
@@ -663,7 +662,7 @@ elif menu_pilihan == "📥 Input Pembelian":
                         st.error(f"Gagal menyimpan data pembelian: {e}")
 
     with tab_edit:
-        st.markdown("### ✏️ Form Edit & Hapus Data Pembelian")
+        st.markdown("Form Edit & Hapus Data Pembelian")
         if df_inv_view.empty:
             st.info("Belum ada data pembelian untuk diedit.")
         else:
@@ -694,9 +693,9 @@ elif menu_pilihan == "📥 Input Pembelian":
                     
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
-                        submit_update = st.form_submit_button("💾 Update / Simpan Perubahan", type="primary", use_container_width=True)
+                        submit_update = st.form_submit_button("Update / Simpan Perubahan", type="primary", use_container_width=True)
                     with btn_col2:
-                        submit_delete = st.form_submit_button("🗑️ Hapus Data Ini", type="secondary", use_container_width=True)
+                        submit_delete = st.form_submit_button("Hapus Data Ini", type="secondary", use_container_width=True)
                         
                     if submit_update:
                         try:
@@ -722,11 +721,11 @@ elif menu_pilihan == "📥 Input Pembelian":
                             st.error(f"Gagal menghapus data: {e}")
 
     st.divider()
-    st.markdown("### 📋 Daftar Invoice & Pembelian Masuk")
+    st.markdown("Daftar Invoice & Pembelian Masuk")
     
     fc_inv1, fc_inv2, fc_inv3 = st.columns(3)
     with fc_inv1:
-        cari_inv = st.text_input("🔍 Cari (No Invoice / Nama Supplier)")
+        cari_inv = st.text_input("Cari (No Invoice / Nama Supplier)")
     with fc_inv2:
         filter_tgl_tipe = st.selectbox("Filter Berdasarkan Tanggal", ["Tanpa Filter Tanggal", "Tanggal Datang", "Jatuh Tempo"])
     with fc_inv3:
@@ -769,8 +768,8 @@ elif menu_pilihan == "📥 Input Pembelian":
                 "tgl_datang": st.column_config.DateColumn("Tgl Datang", width="small"),
                 "jatuh_tempo": st.column_config.DateColumn("Tgl Jatuh Tempo", width="small"),
                 "status_lunas": st.column_config.TextColumn("Status", width="small"),
-                "link_foto": st.column_config.LinkColumn("Bukti Nota", display_text="📥 Download Nota", width="medium"),
-                "link_bayar": st.column_config.LinkColumn("Bukti Bayar", display_text="📥 Download Bukti Bayar", width="medium"),
+                "link_foto": st.column_config.LinkColumn("Bukti Nota", display_text="Download Nota", width="medium"),
+                "link_bayar": st.column_config.LinkColumn("Bukti Bayar", display_text="Download Bukti Bayar", width="medium"),
             },
             hide_index=True,
             use_container_width=True
@@ -779,24 +778,24 @@ elif menu_pilihan == "📥 Input Pembelian":
         grand_total_nilai = df_inv_filtered["total_tagihan"].sum() if "total_tagihan" in df_inv_filtered.columns else 0
         col_gt1, col_gt2 = st.columns([2, 1])
         with col_gt2:
-            st.markdown(f"<div class='metric-card'><div class='card-title'>💰 Grand Total Tagihan</div><div style='font-size:18px;font-weight:700'>{format_rp(grand_total_nilai)}</div></div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='metric-card'><div class='card-title'>Grand Total Tagihan</div><div style='font-size:18px;font-weight:700'>{format_rp(grand_total_nilai)}</div></div>", unsafe_allow_html=True)
     else:
         st.info("Tidak ada data pembelian tercatat yang sesuai dengan filter.")
 
 # ==========================================
 # MENU 4: DATA SUPPLIER
 # ==========================================
-elif menu_pilihan == "🏢 Data Supplier":
-    st.markdown("## 🏢 Manajemen Data Supplier & Tagihan")
+elif menu_pilihan == "Data Supplier":
+    st.markdown("Manajemen Data Supplier & Tagihan")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Pengelolaan informasi profil supplier, status pajak, sistem pembayaran, dan monitoring tagihan.</p>", unsafe_allow_html=True)
     
-    cari_sup = st.text_input("🔍 Cari Supplier (Nama / Jenis Pajak / Sistem Bayar)")
+    cari_sup = st.text_input("Cari Supplier (Nama / Jenis Pajak / Sistem Bayar)")
     df_sup_view = ambil_data_supplier(cari_sup)
     
     if not df_sup_view.empty:
         pdf_sup_bytes = generate_pdf_supplier(df_sup_view, "Semua Supplier Aktif")
         st.download_button(
-            label="📥 Download Laporan PDF Data Supplier",
+            label="Download Laporan PDF Data Supplier",
             data=pdf_sup_bytes,
             file_name=f"Laporan_Supplier_{datetime.date.today()}.pdf",
             mime="application/pdf",
@@ -820,7 +819,7 @@ elif menu_pilihan == "🏢 Data Supplier":
             key="editor_tabel_supplier"
         )
         
-        if st.button("💾 Simpan Perubahan Supplier", type="primary"):
+        if st.button("Simpan Perubahan Supplier", type="primary"):
             count_upd_sup = 0
             for _, row in edited_df_sup.iterrows():
                 orig_row = df_sup_view.loc[df_sup_view["id"] == row["id"]]
@@ -848,17 +847,17 @@ elif menu_pilihan == "🏢 Data Supplier":
 # ==========================================
 # MENU 5: LAPORAN
 # ==========================================
-elif menu_pilihan == "📊 Laporan":
-    st.markdown("## 📊 Pusat Laporan & Analisis Data")
+elif menu_pilihan == "Laporan":
+    st.markdown("Pusat Laporan & Analisis Data")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Analisis visual mendalam terkait performa retur, akumulasi tagihan supplier, dan tren pembelian.</p>", unsafe_allow_html=True)
     
     df_lap_retur = ambil_data_retur()
     df_lap_sup = ambil_data_supplier()
     
-    tab_l1, tab_l2 = st.tabs(["📈 Analisis Retur", "💼 Analisis Tagihan Supplier"])
+    tab_l1, tab_l2 = st.tabs(["Analisis Retur", "Analisis Tagihan Supplier"])
     
     with tab_l1:
-        st.markdown("### Top Supplier Berdasarkan Nilai Retur")
+        st.markdown("Top Supplier Berdasarkan Nilai Retur")
         if not df_lap_retur.empty and "total" in df_lap_retur.columns:
             df_grouped_retur = df_lap_retur.groupby("supplier")["total"].sum().reset_index().sort_values(by="total", ascending=False).head(10)
             fig_bar_ret = px.bar(df_grouped_retur, x="supplier", y="total", title="10 Supplier dengan Nilai Retur Terbesar", text_auto=",", template=plotly_template)
@@ -868,7 +867,7 @@ elif menu_pilihan == "📊 Laporan":
             st.info("Data retur belum mencukupi.")
             
     with tab_l2:
-        st.markdown("### Top Supplier Berdasarkan Tagihan Terbesar")
+        st.markdown("Top Supplier Berdasarkan Tagihan Terbesar")
         if not df_lap_sup.empty and "tagihan" in df_lap_sup.columns:
             df_grouped_sup = df_lap_sup.sort_values(by="tagihan", ascending=False).head(10)
             fig_bar_sup = px.bar(df_grouped_sup, x="nama_supplier", y="tagihan", title="10 Supplier dengan Tagihan Tertinggi", text_auto=",", template=plotly_template)
@@ -880,18 +879,18 @@ elif menu_pilihan == "📊 Laporan":
 # ==========================================
 # MENU 6: PENGATURAN
 # ==========================================
-elif menu_pilihan == "⚙️ Pengaturan":
-    st.markdown("## ⚙️ Pengaturan Sistem")
+elif menu_pilihan == "Pengaturan":
+    st.markdown("Pengaturan Sistem")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Konfigurasi akun, informasi toko, dan preferensi aplikasi.</p>", unsafe_allow_html=True)
     
-    st.markdown("### 🏢 Profil Toko")
+    st.markdown("Profil Toko")
     st.text_input("Nama Toko", value="Toserba Nurja Berkah", disabled=True)
     st.text_input("Lokasi / Alamat", value="Probolinggo, Jawa Timur", disabled=True)
     st.text_input("Sistem Versi", value="v2.5.0 Production", disabled=True)
     
     st.divider()
-    st.markdown("### 🎨 Preferensi Tampilan")
-    mode_setting = st.selectbox("Pilih Tema Utama", ["Terang ☀️", "Gelap 🌙"], index=0 if st.session_state.theme == "Terang" else 1)
+    st.markdown("Preferensi Tampilan")
+    mode_setting = st.selectbox("Pilih Tema Utama", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1)
     if st.button("Terapkan Tema", type="primary"):
         st.session_state.theme = "Terang" if "Terang" in mode_setting else "Gelap"
         st.success("Tema berhasil diperbarui! Silakan refresh halaman jika diperlukan.")

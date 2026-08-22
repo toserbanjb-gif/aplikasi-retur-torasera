@@ -24,16 +24,12 @@ st.markdown(
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
     html, body, [class*="css"]  { font-family: 'Inter', sans-serif; }
-    .app-header { display:flex; align-items:center; gap:18px; }
-    .app-title { font-size:22px; font-weight:700; margin:0; }
+    .app-header { display:flex; align-items:center; gap:12px; }
+    .app-title { font-size:20px; font-weight:700; margin:0; }
     .app-sub { margin:0; color: #64748B; font-size:13px; }
-    .metric-card { background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.01)); padding:14px; border-radius:10px; box-shadow: 0 1px 4px rgba(2,6,23,0.06); }
+    .metric-card { background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01)); padding:12px; border-radius:8px; box-shadow: 0 1px 4px rgba(2,6,23,0.04); }
     .small-muted { color:#94A3B8; font-size:12px; }
-    .btn-primary { background-color:#2563EB !important; color:white !important; border-radius:8px !important; padding:8px 12px; }
-    .download-btn { background:#10B981 !important; color:white !important; border-radius:8px !important; padding:8px 12px; }
-    .card-title { font-size:14px; font-weight:600; margin-bottom:6px; }
-    .table-header { background-color:#0F172A !important; color:white !important; }
-    /* Sidebar tweaks */
+    .card-title { font-size:13px; font-weight:600; margin-bottom:6px; }
     [data-testid="stSidebar"] .css-1d391kg { padding-top: 8px; }
     </style>
     """,
@@ -102,7 +98,7 @@ def ambil_data_pembelian(cari=""):
         query = supabase.table("data_pembelian").select("*")
         response = query.execute()
         if not response.data:
-            return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas"])
+            return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar"])
         df = pd.DataFrame(response.data)
         df.columns = [str(c).lower() for c in df.columns]
         if "id" not in df.columns:
@@ -116,6 +112,15 @@ def ambil_data_pembelian(cari=""):
         if "jatuh_tempo" in df.columns:
             df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
 
+        if "link_foto" not in df.columns:
+            df["link_foto"] = ""
+        else:
+            df["link_foto"] = df["link_foto"].fillna("")
+        if "link_bayar" not in df.columns:
+            df["link_bayar"] = ""
+        else:
+            df["link_bayar"] = df["link_bayar"].fillna("")
+
         if cari:
             kw = cari.lower()
             df = df[
@@ -125,7 +130,7 @@ def ambil_data_pembelian(cari=""):
             ]
         return df
     except Exception:
-        return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas"])
+        return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar"])
 
 # Ambil data supplier untuk cek notifikasi
 df_sup_notif = ambil_data_supplier()
@@ -283,7 +288,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 
 # --- SIDEBAR (TOGGLE MODE DI SIDEBAR) ---
 with st.sidebar:
-    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:48px;height:48px;background:#2563EB;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:#2563EB;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
     st.divider()
     theme_choice = st.radio("Pilih Mode", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
     st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
@@ -322,8 +327,30 @@ else:
 DAFTAR_SUPPLIER = [
     "Belum Tau", "PT ARTABOGA (Hanif)", "PT. PANGAN LESTARI (Ratna)", "SINAR SURYA SUKSES (Adhit)",
     "PT Borwita Citra Prima (Listin)", "PT. SINAR NIAGA SEJAHTERA (Angga)", "PT SINARMAS DISTRIBUSI NUSANTARA (Mathias)",
-    # ... (sisa daftar tetap sama seperti sebelumnya)
-    "SUMBER CIPTA MULTINIAGA", "SUMBER CIPTA MULTINIAGA", "BSU"
+    "PT Eka Artha Buana Darmawan (Unilever)", "PT Eka Artha Buana Darmawan (Nestle)", "TRI USAHA JAYA",
+    "PT BAHAGIA INTRA NIAGA (Onky)", "PT Pinus Merah Abadi (Bayuhan)", "PT JAPFA FOOD INDONESIA (Uwais)",
+    "PT BUKIT MAKMUR INTI ABADI (Badrus)", "PT Dinamika Daya Segara", "PT SUBUR MITRA SUKSES (Taufiq)",
+    "PT AJINOMOTO SALES INDONESIA (Rosi)", "PT TIGARAKSA SENTOSA", "PT Masamedi Intifarm Indo (Romeo)",
+    "PT DISTRINDO AMAN SEJAHTERA (Agus)", "PT BINA SAN PRIMA (Alfia)", "PT LIVIA MANURI SEJATI (Aldi)",
+    "PT SUMBER BARU NIAGA (Tomi)", "PT ANDATU MULIA LESTARI (Muhammad Haris)", "PT JAVAS TRIPTA MANDALA (Roby)",
+    "PT KHINGGUAN (Ima)", "PT TIRTA PRIMA RASA (Dwi)", "PT VICTORIA CARE INDONESIA TBK (Saryono)",
+    "PT FARMA NIAGA DISTRIBUSINDO", "PT TARUNAKUSUMA (Wasik)", "PT SEKAWAN KOSMETIK WASANTARA (Ainun)",
+    "PT SAKTISETIA SANTOSA", "SINAR SURYA UTAMA", "CV SINAR TERANG (Gontor)", "PT SEMESTANUSTRA DISTRINDO (Imron)",
+    "PT PELITA NUSA RAYA (Yulio)", "PT Fastra Buana Kanfans (Abdul)", "UD PILAR MAKMUR", "PT WIRA SADANA LESTARI (Yono)",
+    "PT SAI (Yuli)", "Nova (Ari)", "PT SNACK (Rizky/Tris)", "UD ARJO JAYA (Aldi)", "COCA COLA",
+    "PT PERUSAHAAN DAGANG TEMPO", "UD KENCONO WUNGU (Opium)", "PT CIPTA NIAGA SEMESTA", "PUNGGING ELECTRIC",
+    "PT Unirama Duta Niaga (Amru)", "PT TUMBAKMAS NIAGA (Hasan)", "PT SUPRALITA MANDIRI (Farida)",
+    "PT Surya Gemilang Lestari Sentosa (Davina)", "PT ASIA PARAMITA INDAH (Andhie)", "PT PUJI SURYA INDAH (Qomari)",
+    "PT MANOHARA ADIKA DISTRINDO (Deni)", "UD SRI REJEKI (Sumar)", "CV SINAR ASIA PERKASA (Valentinus)",
+    "Toserba Sundra (Kaesang)", "PT PANCA PILAR (Aru)", "PT INDOMARCO ADI PRIMA", "PT KEVINDO PRATAMA PERKASA",
+    "PT ARTA DWITUNGGAL ABADI (Febri)", "DC NURUL JADID", "CV Belva", "PT HARSI PANGAN UTAMA", "BORNEO",
+    "EGIZ UMKM (Ibu Riz)", "UD Mentari Jaya Putra", "AIRA", "PT KIAN RAGAM DISTRIBUTOR", "OPIK PUTRA SNACK", "CV PUMA UTAMA MAKMUR ARTARIA",
+    "PT PRAKARSA JAYA SENTOSA", "HELLO (Memenuhi Selera Anda)", "HASAN MEJA", "PT CAMPINA ICE CREAM INDUSTRY",
+    "Yakult", "PT LUKINDARI PERMATA", "PT PARIMAS BOGA RAYA", "CV NUGRAHENI KARTIKA SARI DRINGU", "AZKA BAROKAH",
+    "REJEKI JAYA", "DWIKARYA INDONESIA MANDIRI", "PT GOLDEN AICE", "BERKAH HS", "PT Mitra Pharmasi Jaya",
+    "INDOWANGI PARFUM", "CV Argo Bentar Gemilang", "UD ANUGERAH JAYA PROBOLINGGO", "PT SUKANDA DJAYA", "CV KARTIKA JAYA MAKMUR",
+    "PT ULTRAJAYA MILK INDUSTRI & TRADING CO. TBK", "Bulog Indonesia", "UD HARIS JAYA PROBOLINGGO", "Jaya Subur",
+    "PADMATIRTA", "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG", "PT HADI CITRA CEMERLANG","PT PILAR UTAMA DISTRIBUSI", "MARGA NUSARAYA", "PT FKS PANGAN NUSANTRA","SUMBER CIPTA MULTINIAGA","SUMBER CIPTA MULTINIAGA", "BSU"
 ]
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
@@ -371,8 +398,8 @@ with head_c1:
     st.markdown("<div class='app-header'><div><h1 class='app-title'>Sistem Manajemen Retur & Supplier</h1><div class='app-sub'>Toserba Nurja Berkah — Kelola retur, tagihan, dan laporan</div></div></div>", unsafe_allow_html=True)
 with head_c2:
     jml_notif = len(notif_jatuh_tempo)
-    label_lonceng = f"Notifikasi ({jml_notif})" if jml_notif > 0 else "Notifikasi"
-    if st.button(label_lonceng, help="Cek Peringatan Jatuh Tempo"):
+    label_notif = f"Notifikasi ({jml_notif})" if jml_notif > 0 else "Notifikasi"
+    if st.button(label_notif, help="Cek Peringatan Jatuh Tempo"):
         dialog_notifikasi_jatuh_tempo()
 
 st.divider()
@@ -591,9 +618,13 @@ elif menu_pilihan == "Input Pembelian":
     st.markdown("Pencatatan & Manajemen Invoice Supplier")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota dan bukti pembayaran.</p>", unsafe_allow_html=True)
     
+    # Ambil data terbaru
     df_inv_view = ambil_data_pembelian("")
+    
+    # Buat Tabs untuk memisahkan Menu Tambah dan Edit/Hapus
     tab_tambah, tab_edit = st.tabs(["Tambah Pembelian Baru", "Edit / Hapus Pembelian"])
     
+    # ================= TAB 1: TAMBAH PEMBELIAN =================
     with tab_tambah:
         with st.form("form_input_pembelian", clear_on_submit=True):
             ic1, ic2 = st.columns(2)
@@ -661,6 +692,7 @@ elif menu_pilihan == "Input Pembelian":
                     except Exception as e:
                         st.error(f"Gagal menyimpan data pembelian: {e}")
 
+    # ================= TAB 2: EDIT / HAPUS PEMBELIAN =================
     with tab_edit:
         st.markdown("Form Edit & Hapus Data Pembelian")
         if df_inv_view.empty:
@@ -672,6 +704,14 @@ elif menu_pilihan == "Input Pembelian":
             if selected_str:
                 selected_id = int(selected_str.split("|")[0].replace("ID:", "").strip())
                 data_terpilih = df_inv_view[df_inv_view["id"] == selected_id].iloc[0]
+
+                # ambil link yang sudah tersimpan (jika ada)
+                current_link_nota = ""
+                current_link_bayar = ""
+                if "link_foto" in data_terpilih and pd.notna(data_terpilih["link_foto"]):
+                    current_link_nota = data_terpilih["link_foto"]
+                if "link_bayar" in data_terpilih and pd.notna(data_terpilih["link_bayar"]):
+                    current_link_bayar = data_terpilih["link_bayar"]
                 
                 with st.form("form_edit_pembelian"):
                     ec1, ec2 = st.columns(2)
@@ -681,16 +721,56 @@ elif menu_pilihan == "Input Pembelian":
                         e_supplier = st.selectbox("Nama Supplier", DAFTAR_SUPPLIER, index=sup_idx, key="edit_sup")
                         e_tagihan = st.number_input("Total Tagihan / Nilai Faktur (Rp)", min_value=0.0, value=float(data_terpilih["total_tagihan"]), step=1000.0)
                     with ec2:
-                        parsed_tgl_datang = datetime.datetime.strptime(str(data_terpilih["tgl_datang"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["tgl_datang"]) else datetime.date.today()
+                        try:
+                            parsed_tgl_datang = datetime.datetime.strptime(str(data_terpilih["tgl_datang"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["tgl_datang"]) else datetime.date.today()
+                        except Exception:
+                            parsed_tgl_datang = datetime.date.today()
                         e_tgl_datang = st.date_input("Tanggal Datang Barang", value=parsed_tgl_datang)
                         
-                        parsed_jatuh_tempo = datetime.datetime.strptime(str(data_terpilih["jatuh_tempo"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["jatuh_tempo"]) else datetime.date.today()
+                        try:
+                            parsed_jatuh_tempo = datetime.datetime.strptime(str(data_terpilih["jatuh_tempo"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["jatuh_tempo"]) else datetime.date.today()
+                        except Exception:
+                            parsed_jatuh_tempo = datetime.date.today()
                         e_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=parsed_jatuh_tempo)
                         
                         stat_list = ["Belum Lunas", "Lunas", "Sebagian"]
                         stat_idx = stat_list.index(data_terpilih["status_lunas"]) if data_terpilih["status_lunas"] in stat_list else 0
                         e_status_lunas = st.selectbox("Status Pelunasan", stat_list, index=stat_idx, key="edit_stat")
                     
+                    # show current files (preview for images, link for PDFs)
+                    st.markdown("Bukti Saat Ini")
+                    c1, c2 = st.columns(2)
+                    with c1:
+                        if current_link_nota:
+                            if str(current_link_nota).lower().endswith(".pdf"):
+                                st.markdown(f"[Lihat / Unduh Bukti Nota]({current_link_nota})")
+                            else:
+                                try:
+                                    st.image(current_link_nota, width=200, caption="Bukti Nota (saat ini)")
+                                except Exception:
+                                    st.markdown(f"[Lihat / Unduh Bukti Nota]({current_link_nota})")
+                        else:
+                            st.markdown("Tidak ada bukti nota tersimpan.")
+                    with c2:
+                        if current_link_bayar:
+                            if str(current_link_bayar).lower().endswith(".pdf"):
+                                st.markdown(f"[Lihat / Unduh Bukti Pembayaran]({current_link_bayar})")
+                            else:
+                                try:
+                                    st.image(current_link_bayar, width=200, caption="Bukti Pembayaran (saat ini)")
+                                except Exception:
+                                    st.markdown(f"[Lihat / Unduh Bukti Pembayaran]({current_link_bayar})")
+                        else:
+                            st.markdown("Tidak ada bukti pembayaran tersimpan.")
+
+                    st.markdown("---")
+                    st.markdown("Upload Bukti Baru (opsional)")
+                    uu1, uu2 = st.columns(2)
+                    with uu1:
+                        e_file_nota = st.file_uploader("Upload Bukti Nota (png/jpg/pdf) - opsional", type=["png", "jpg", "jpeg", "pdf"], key="edit_up_nota")
+                    with uu2:
+                        e_file_bayar = st.file_uploader("Upload Bukti Pembayaran (png/jpg/pdf) - opsional", type=["png", "jpg", "jpeg", "pdf"], key="edit_up_bayar")
+
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
                         submit_update = st.form_submit_button("Update / Simpan Perubahan", type="primary", use_container_width=True)
@@ -699,14 +779,44 @@ elif menu_pilihan == "Input Pembelian":
                         
                     if submit_update:
                         try:
+                            public_url_nota = current_link_nota or ""
+                            public_url_bayar = current_link_bayar or ""
+                            timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                            safe_invoice = str(e_invoice).replace("/", "_")
+
+                            if e_file_nota is not None:
+                                ext_nota = e_file_nota.name.split(".")[-1]
+                                name_nota = f"nota_{timestamp_str}_{safe_invoice}.{ext_nota}"
+                                supabase.storage.from_("bukti_pembelian").upload(
+                                    path=name_nota,
+                                    file=e_file_nota.getvalue(),
+                                    file_options={"content-type": e_file_nota.type}
+                                )
+                                res_nota = supabase.storage.from_("bukti_pembelian").get_public_url(name_nota)
+                                public_url_nota = res_nota if isinstance(res_nota, str) else res_nota.get("publicUrl", "")
+
+                            if e_file_bayar is not None:
+                                ext_bayar = e_file_bayar.name.split(".")[-1]
+                                name_bayar = f"bayar_{timestamp_str}_{safe_invoice}.{ext_bayar}"
+                                supabase.storage.from_("bukti_pembelian").upload(
+                                    path=name_bayar,
+                                    file=e_file_bayar.getvalue(),
+                                    file_options={"content-type": e_file_bayar.type}
+                                )
+                                res_bayar = supabase.storage.from_("bukti_pembelian").get_public_url(name_bayar)
+                                public_url_bayar = res_bayar if isinstance(res_bayar, str) else res_bayar.get("publicUrl", "")
+
                             supabase.table("data_pembelian").update({
                                 "no_invoice": str(e_invoice),
                                 "nama_supplier": str(e_supplier),
                                 "total_tagihan": float(e_tagihan),
                                 "tgl_datang": str(e_tgl_datang),
                                 "jatuh_tempo": str(e_jatuh_tempo),
-                                "status_lunas": str(e_status_lunas)
+                                "status_lunas": str(e_status_lunas),
+                                "link_foto": str(public_url_nota),
+                                "link_bayar": str(public_url_bayar)
                             }).eq("id", selected_id).execute()
+
                             st.success("Data pembelian berhasil diperbarui!")
                             st.experimental_rerun()
                         except Exception as e:
@@ -723,6 +833,7 @@ elif menu_pilihan == "Input Pembelian":
     st.divider()
     st.markdown("Daftar Invoice & Pembelian Masuk")
     
+    # --- FILTER PENCARIAN & TABEL VIEW ---
     fc_inv1, fc_inv2, fc_inv3 = st.columns(3)
     with fc_inv1:
         cari_inv = st.text_input("Cari (No Invoice / Nama Supplier)")
@@ -748,16 +859,6 @@ elif menu_pilihan == "Input Pembelian":
             ]
     
     if not df_inv_filtered.empty:
-        if "link_foto" not in df_inv_filtered.columns:
-            df_inv_filtered["link_foto"] = ""
-        else:
-            df_inv_filtered["link_foto"] = df_inv_filtered["link_foto"].fillna("")
-            
-        if "link_bayar" not in df_inv_filtered.columns:
-            df_inv_filtered["link_bayar"] = ""
-        else:
-            df_inv_filtered["link_bayar"] = df_inv_filtered["link_bayar"].fillna("")
-
         st.dataframe(
             df_inv_filtered,
             column_config={

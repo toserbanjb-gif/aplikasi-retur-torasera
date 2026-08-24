@@ -73,7 +73,7 @@ def ambil_data_supplier(cari=""):
         df["no_urut"] = pd.to_numeric(df["no_urut"], errors="coerce").fillna(1).astype(int)
         df["tagihan"] = pd.to_numeric(df["tagihan"], errors="coerce").fillna(0.0).astype(float)
         df["nama_supplier"] = df["nama_supplier"].astype(str)
-        df["jenis_pajak"] = df["jenis_pajak"].astype(str)
+        df["jenis_pajak"] = df["jenis_pajak"].astype(str) if "jenis_pajak" in df.columns else "Non PKP"
         df["sistem_bayar"] = df["sistem_bayar"].astype(str)
         
         if "jatuh_tempo" in df.columns:
@@ -98,7 +98,7 @@ def ambil_data_pembelian(cari=""):
         query = supabase.table("data_pembelian").select("*")
         response = query.execute()
         if not response.data:
-            return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar"])
+            return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar", "link_faktur_pajak", "jenis_pajak"])
         df = pd.DataFrame(response.data)
         df.columns = [str(c).lower() for c in df.columns]
         if "id" not in df.columns:
@@ -112,6 +112,7 @@ def ambil_data_pembelian(cari=""):
         if "jatuh_tempo" in df.columns:
             df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
 
+        # ensure new columns exist and default values
         if "link_foto" not in df.columns:
             df["link_foto"] = ""
         else:
@@ -120,6 +121,14 @@ def ambil_data_pembelian(cari=""):
             df["link_bayar"] = ""
         else:
             df["link_bayar"] = df["link_bayar"].fillna("")
+        if "link_faktur_pajak" not in df.columns:
+            df["link_faktur_pajak"] = ""
+        else:
+            df["link_faktur_pajak"] = df["link_faktur_pajak"].fillna("")
+        if "jenis_pajak" not in df.columns:
+            df["jenis_pajak"] = "Non PKP"
+        else:
+            df["jenis_pajak"] = df["jenis_pajak"].fillna("Non PKP")
 
         if cari:
             kw = cari.lower()
@@ -130,7 +139,7 @@ def ambil_data_pembelian(cari=""):
             ]
         return df
     except Exception:
-        return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar"])
+        return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar", "link_faktur_pajak", "jenis_pajak"])
 
 # Ambil data supplier untuk cek notifikasi
 df_sup_notif = ambil_data_supplier()
@@ -173,7 +182,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
         Paragraph("<b>Jenis</b>", style_cell_bold),
         Paragraph("<b>Sistem Bayar</b>", style_cell_bold),
         Paragraph("<b>Jatuh Tempo</b>", style_cell_bold)
-    ]]
+    ]] 
 
     total_tagihan_pdf = 0
     for idx, row in df_export.iterrows():
@@ -183,7 +192,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
             Paragraph(str(row['no_urut']), style_cell),
             Paragraph(html.escape(str(row['nama_supplier'])), style_cell),
             Paragraph(f"Rp {tagihan_val:,.0f}", style_cell),
-            Paragraph(html.escape(str(row['jenis_pajak'])), style_cell),
+            Paragraph(html.escape(str(row.get('jenis_pajak', ''))), style_cell),
             Paragraph(html.escape(str(row['sistem_bayar'])), style_cell),
             Paragraph(str(row['jatuh_tempo']), style_cell)
         ])
@@ -616,7 +625,7 @@ elif menu_pilihan == "List Retur":
 # ==========================================
 elif menu_pilihan == "Input Pembelian":
     st.markdown("Pencatatan & Manajemen Invoice Supplier")
-    st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota dan bukti pembayaran.</p>", unsafe_allow_html=True)
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota, bukti pembayaran, dan faktur pajak.</p>", unsafe_allow_html=True)
     
     # Ambil data terbaru
     df_inv_view = ambil_data_pembelian("")
@@ -632,17 +641,20 @@ elif menu_pilihan == "Input Pembelian":
                 i_invoice = st.text_input("Nomor Invoice / Faktur")
                 i_supplier = st.selectbox("Nama Supplier", DAFTAR_SUPPLIER, key="inv_sup_baru")
                 i_tagihan = st.number_input("Total Tagihan / Nilai Faktur (Rp)", min_value=0.0, value=0.0, step=1000.0)
+                i_jenis_pajak = st.selectbox("Jenis Pajak", ["Non PKP", "PKP"], index=0)
             with ic2:
                 i_tgl_datang = st.date_input("Tanggal Datang Barang", value=datetime.date.today())
                 i_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=datetime.date.today() + datetime.timedelta(days=30))
                 i_status_lunas = st.selectbox("Status Pelunasan", ["Belum Lunas", "Lunas", "Sebagian"], key="inv_stat_baru")
                 
             st.markdown("---")
-            uc1, uc2 = st.columns(2)
+            uc1, uc2, uc3 = st.columns([1,1,1])
             with uc1:
                 i_file_nota = st.file_uploader("Upload Foto/File Bukti Nota (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_nota")
             with uc2:
                 i_file_bayar = st.file_uploader("Upload Foto/File Bukti Pembayaran (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_bayar")
+            with uc3:
+                i_file_faktur_pajak = st.file_uploader("Upload Foto/File Faktur Pajak (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_faktur_pajak")
             
             submit_inv = st.form_submit_button("Simpan Data Pembelian", type="primary")
             if submit_inv:
@@ -652,11 +664,13 @@ elif menu_pilihan == "Input Pembelian":
                     try:
                         public_url_nota = ""
                         public_url_bayar = ""
+                        public_url_faktur_pajak = ""
                         timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                        
+                        safe_invoice = str(i_invoice).replace("/", "_")
+
                         if i_file_nota is not None:
                             ext_nota = i_file_nota.name.split(".")[-1]
-                            name_nota = f"nota_{timestamp_str}_{str(i_invoice).replace('/', '_')}.{ext_nota}"
+                            name_nota = f"nota_{timestamp_str}_{safe_invoice}.{ext_nota}"
                             supabase.storage.from_("bukti_pembelian").upload(
                                 path=name_nota,
                                 file=i_file_nota.getvalue(),
@@ -667,7 +681,7 @@ elif menu_pilihan == "Input Pembelian":
 
                         if i_file_bayar is not None:
                             ext_bayar = i_file_bayar.name.split(".")[-1]
-                            name_bayar = f"bayar_{timestamp_str}_{str(i_invoice).replace('/', '_')}.{ext_bayar}"
+                            name_bayar = f"bayar_{timestamp_str}_{safe_invoice}.{ext_bayar}"
                             supabase.storage.from_("bukti_pembelian").upload(
                                 path=name_bayar,
                                 file=i_file_bayar.getvalue(),
@@ -675,6 +689,17 @@ elif menu_pilihan == "Input Pembelian":
                             )
                             res_bayar = supabase.storage.from_("bukti_pembelian").get_public_url(name_bayar)
                             public_url_bayar = res_bayar if isinstance(res_bayar, str) else res_bayar.get("publicUrl", "")
+
+                        if i_file_faktur_pajak is not None:
+                            ext_fp = i_file_faktur_pajak.name.split(".")[-1]
+                            name_fp = f"faktur_pajak_{timestamp_str}_{safe_invoice}.{ext_fp}"
+                            supabase.storage.from_("bukti_pembelian").upload(
+                                path=name_fp,
+                                file=i_file_faktur_pajak.getvalue(),
+                                file_options={"content-type": i_file_faktur_pajak.type}
+                            )
+                            res_fp = supabase.storage.from_("bukti_pembelian").get_public_url(name_fp)
+                            public_url_faktur_pajak = res_fp if isinstance(res_fp, str) else res_fp.get("publicUrl", "")
 
                         payload_inv = {
                             "no_invoice": str(i_invoice),
@@ -684,7 +709,9 @@ elif menu_pilihan == "Input Pembelian":
                             "jatuh_tempo": str(i_jatuh_tempo),
                             "status_lunas": str(i_status_lunas),
                             "link_foto": str(public_url_nota),
-                            "link_bayar": str(public_url_bayar)
+                            "link_bayar": str(public_url_bayar),
+                            "link_faktur_pajak": str(public_url_faktur_pajak),
+                            "jenis_pajak": str(i_jenis_pajak)
                         }
                         supabase.table("data_pembelian").insert(payload_inv).execute()
                         st.success("Data pembelian berhasil disimpan!")
@@ -706,12 +733,10 @@ elif menu_pilihan == "Input Pembelian":
                 data_terpilih = df_inv_view[df_inv_view["id"] == selected_id].iloc[0]
 
                 # ambil link yang sudah tersimpan (jika ada)
-                current_link_nota = ""
-                current_link_bayar = ""
-                if "link_foto" in data_terpilih and pd.notna(data_terpilih["link_foto"]):
-                    current_link_nota = data_terpilih["link_foto"]
-                if "link_bayar" in data_terpilih and pd.notna(data_terpilih["link_bayar"]):
-                    current_link_bayar = data_terpilih["link_bayar"]
+                current_link_nota = data_terpilih.get("link_foto", "") if "link_foto" in data_terpilih else ""
+                current_link_bayar = data_terpilih.get("link_bayar", "") if "link_bayar" in data_terpilih else ""
+                current_link_faktur_pajak = data_terpilih.get("link_faktur_pajak", "") if "link_faktur_pajak" in data_terpilih else ""
+                current_jenis_pajak = data_terpilih.get("jenis_pajak", "Non PKP") if "jenis_pajak" in data_terpilih else "Non PKP"
                 
                 with st.form("form_edit_pembelian"):
                     ec1, ec2 = st.columns(2)
@@ -720,6 +745,7 @@ elif menu_pilihan == "Input Pembelian":
                         sup_idx = DAFTAR_SUPPLIER.index(data_terpilih["nama_supplier"]) if data_terpilih["nama_supplier"] in DAFTAR_SUPPLIER else 0
                         e_supplier = st.selectbox("Nama Supplier", DAFTAR_SUPPLIER, index=sup_idx, key="edit_sup")
                         e_tagihan = st.number_input("Total Tagihan / Nilai Faktur (Rp)", min_value=0.0, value=float(data_terpilih["total_tagihan"]), step=1000.0)
+                        e_jenis_pajak = st.selectbox("Jenis Pajak", ["Non PKP", "PKP"], index=0 if current_jenis_pajak == "Non PKP" else 1)
                     with ec2:
                         try:
                             parsed_tgl_datang = datetime.datetime.strptime(str(data_terpilih["tgl_datang"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["tgl_datang"]) else datetime.date.today()
@@ -739,7 +765,7 @@ elif menu_pilihan == "Input Pembelian":
                     
                     # show current files (preview for images, link for PDFs)
                     st.markdown("Bukti Saat Ini")
-                    c1, c2 = st.columns(2)
+                    c1, c2, c3 = st.columns(3)
                     with c1:
                         if current_link_nota:
                             if str(current_link_nota).lower().endswith(".pdf"):
@@ -762,14 +788,27 @@ elif menu_pilihan == "Input Pembelian":
                                     st.markdown(f"[Lihat / Unduh Bukti Pembayaran]({current_link_bayar})")
                         else:
                             st.markdown("Tidak ada bukti pembayaran tersimpan.")
+                    with c3:
+                        if current_link_faktur_pajak:
+                            if str(current_link_faktur_pajak).lower().endswith(".pdf"):
+                                st.markdown(f"[Lihat / Unduh Faktur Pajak]({current_link_faktur_pajak})")
+                            else:
+                                try:
+                                    st.image(current_link_faktur_pajak, width=200, caption="Faktur Pajak (saat ini)")
+                                except Exception:
+                                    st.markdown(f"[Lihat / Unduh Faktur Pajak]({current_link_faktur_pajak})")
+                        else:
+                            st.markdown("Tidak ada faktur pajak tersimpan.")
 
                     st.markdown("---")
                     st.markdown("Upload Bukti Baru (opsional)")
-                    uu1, uu2 = st.columns(2)
+                    uu1, uu2, uu3 = st.columns([1,1,1])
                     with uu1:
                         e_file_nota = st.file_uploader("Upload Bukti Nota (png/jpg/pdf) - opsional", type=["png", "jpg", "jpeg", "pdf"], key="edit_up_nota")
                     with uu2:
                         e_file_bayar = st.file_uploader("Upload Bukti Pembayaran (png/jpg/pdf) - opsional", type=["png", "jpg", "jpeg", "pdf"], key="edit_up_bayar")
+                    with uu3:
+                        e_file_faktur_pajak = st.file_uploader("Upload Faktur Pajak (png/jpg/pdf) - opsional", type=["png", "jpg", "jpeg", "pdf"], key="edit_up_faktur_pajak")
 
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
@@ -781,6 +820,7 @@ elif menu_pilihan == "Input Pembelian":
                         try:
                             public_url_nota = current_link_nota or ""
                             public_url_bayar = current_link_bayar or ""
+                            public_url_faktur_pajak = current_link_faktur_pajak or ""
                             timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                             safe_invoice = str(e_invoice).replace("/", "_")
 
@@ -806,6 +846,17 @@ elif menu_pilihan == "Input Pembelian":
                                 res_bayar = supabase.storage.from_("bukti_pembelian").get_public_url(name_bayar)
                                 public_url_bayar = res_bayar if isinstance(res_bayar, str) else res_bayar.get("publicUrl", "")
 
+                            if e_file_faktur_pajak is not None:
+                                ext_fp = e_file_faktur_pajak.name.split(".")[-1]
+                                name_fp = f"faktur_pajak_{timestamp_str}_{safe_invoice}.{ext_fp}"
+                                supabase.storage.from_("bukti_pembelian").upload(
+                                    path=name_fp,
+                                    file=e_file_faktur_pajak.getvalue(),
+                                    file_options={"content-type": e_file_faktur_pajak.type}
+                                )
+                                res_fp = supabase.storage.from_("bukti_pembelian").get_public_url(name_fp)
+                                public_url_faktur_pajak = res_fp if isinstance(res_fp, str) else res_fp.get("publicUrl", "")
+
                             supabase.table("data_pembelian").update({
                                 "no_invoice": str(e_invoice),
                                 "nama_supplier": str(e_supplier),
@@ -814,7 +865,9 @@ elif menu_pilihan == "Input Pembelian":
                                 "jatuh_tempo": str(e_jatuh_tempo),
                                 "status_lunas": str(e_status_lunas),
                                 "link_foto": str(public_url_nota),
-                                "link_bayar": str(public_url_bayar)
+                                "link_bayar": str(public_url_bayar),
+                                "link_faktur_pajak": str(public_url_faktur_pajak),
+                                "jenis_pajak": str(e_jenis_pajak)
                             }).eq("id", selected_id).execute()
 
                             st.success("Data pembelian berhasil diperbarui!")
@@ -865,12 +918,14 @@ elif menu_pilihan == "Input Pembelian":
                 "id": st.column_config.NumberColumn("ID", width="small"),
                 "no_invoice": st.column_config.TextColumn("No Invoice", width="medium"),
                 "nama_supplier": st.column_config.TextColumn("Supplier", width="large"),
+                "jenis_pajak": st.column_config.TextColumn("Jenis Pajak", width="small"),
                 "total_tagihan": st.column_config.NumberColumn("Total Tagihan (Rp)", format="Rp %'d", width="medium"),
                 "tgl_datang": st.column_config.DateColumn("Tgl Datang", width="small"),
                 "jatuh_tempo": st.column_config.DateColumn("Tgl Jatuh Tempo", width="small"),
                 "status_lunas": st.column_config.TextColumn("Status", width="small"),
                 "link_foto": st.column_config.LinkColumn("Bukti Nota", display_text="Download Nota", width="medium"),
                 "link_bayar": st.column_config.LinkColumn("Bukti Bayar", display_text="Download Bukti Bayar", width="medium"),
+                "link_faktur_pajak": st.column_config.LinkColumn("Faktur Pajak", display_text="Download Faktur Pajak", width="medium"),
             },
             hide_index=True,
             use_container_width=True

@@ -1,5 +1,3 @@
-# app.py (lengkap, sudah memperbaiki masalah kolom yang tidak ada dan menambahkan upload faktur pajak)
-import re
 import datetime
 from io import BytesIO
 import html
@@ -33,7 +31,6 @@ st.markdown(
     .small-muted { color:#94A3B8; font-size:12px; }
     .card-title { font-size:13px; font-weight:600; margin-bottom:6px; }
     [data-testid="stSidebar"] .css-1d391kg { padding-top: 8px; }
-    .error-box { background:#fee2e2; color:#7f1d1d; padding:10px; border-radius:6px; margin-top:8px; }
     </style>
     """,
     unsafe_allow_html=True,
@@ -59,74 +56,6 @@ def init_supabase() -> Client:
 
 supabase = init_supabase()
 
-# --- Helper: safe insert / update that removes missing columns in case Supabase returns schema errors ---
-_missing_col_pattern = re.compile(r"Could not find the '([^']+)' column", re.IGNORECASE)
-
-def _extract_missing_columns_from_error(err_text: str):
-    """Return list of missing column names parsed from error text."""
-    if not err_text:
-        return []
-    return _missing_col_pattern.findall(err_text)
-
-def _check_response_error(res):
-    """Check common response shapes for errors and return error string or None."""
-    try:
-        # supabase-py sometimes returns object with .error, or dict with 'error'
-        if hasattr(res, "error") and res.error:
-            return str(res.error)
-        if isinstance(res, dict) and res.get("error"):
-            return str(res.get("error"))
-    except Exception:
-        pass
-    return None
-
-def safe_insert(table_name: str, payload: dict):
-    """Try to insert payload, and if DB complains about missing columns, remove them and retry."""
-    payload_copy = payload.copy()
-    tried = 0
-    while True:
-        tried += 1
-        try:
-            res = supabase.table(table_name).insert(payload_copy).execute()
-            err = _check_response_error(res)
-            if err:
-                raise Exception(err)
-            return res
-        except Exception as e:
-            msg = str(e)
-            missing = _extract_missing_columns_from_error(msg)
-            if missing and tried == 1:
-                # remove missing keys and retry once
-                for col in missing:
-                    payload_copy.pop(col, None)
-                # keep a visible message to the user
-                st.warning(f"Kolom DB tidak ditemukan: {missing}. Mengirim tanpa kolom tersebut sementara.")
-                continue
-            # no recognizable missing-column error (or already retried)
-            raise
-
-def safe_update(table_name: str, payload: dict, id_field: str, id_value):
-    """Try to update payload for row id_field == id_value, with fallback removing missing columns."""
-    payload_copy = payload.copy()
-    tried = 0
-    while True:
-        tried += 1
-        try:
-            res = supabase.table(table_name).update(payload_copy).eq(id_field, id_value).execute()
-            err = _check_response_error(res)
-            if err:
-                raise Exception(err)
-            return res
-        except Exception as e:
-            msg = str(e)
-            missing = _extract_missing_columns_from_error(msg)
-            if missing and tried == 1:
-                for col in missing:
-                    payload_copy.pop(col, None)
-                st.warning(f"Kolom DB tidak ditemukan: {missing}. Memperbarui tanpa kolom tersebut sementara.")
-                continue
-            raise
-
 # --- FUNGSI AMBIL DATA SUPPLIER ---
 def ambil_data_supplier(cari=""):
     try:
@@ -145,7 +74,7 @@ def ambil_data_supplier(cari=""):
         df["tagihan"] = pd.to_numeric(df["tagihan"], errors="coerce").fillna(0.0).astype(float)
         df["nama_supplier"] = df["nama_supplier"].astype(str)
         df["jenis_pajak"] = df["jenis_pajak"].astype(str) if "jenis_pajak" in df.columns else "Non PKP"
-        df["sistem_bayar"] = df["sistem_bayar"].astype(str) if "sistem_bayar" in df.columns else ""
+        df["sistem_bayar"] = df["sistem_bayar"].astype(str)
         
         if "jatuh_tempo" in df.columns:
             df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
@@ -406,8 +335,31 @@ else:
 # --- CONSTANTS ---
 DAFTAR_SUPPLIER = [
     "Belum Tau", "PT ARTABOGA (Hanif)", "PT. PANGAN LESTARI (Ratna)", "SINAR SURYA SUKSES (Adhit)",
-    # ... (daftar lengkap sama seperti sebelumnya)
-    "SUMBER CIPTA MULTINIAGA", "SUMBER CIPTA MULTINIAGA", "BSU"
+    "PT Borwita Citra Prima (Listin)", "PT. SINAR NIAGA SEJAHTERA (Angga)", "PT SINARMAS DISTRIBUSI NUSANTARA (Mathias)",
+    "PT Eka Artha Buana Darmawan (Unilever)", "PT Eka Artha Buana Darmawan (Nestle)", "TRI USAHA JAYA",
+    "PT BAHAGIA INTRA NIAGA (Onky)", "PT Pinus Merah Abadi (Bayuhan)", "PT JAPFA FOOD INDONESIA (Uwais)",
+    "PT BUKIT MAKMUR INTI ABADI (Badrus)", "PT Dinamika Daya Segara", "PT SUBUR MITRA SUKSES (Taufiq)",
+    "PT AJINOMOTO SALES INDONESIA (Rosi)", "PT TIGARAKSA SENTOSA", "PT Masamedi Intifarm Indo (Romeo)",
+    "PT DISTRINDO AMAN SEJAHTERA (Agus)", "PT BINA SAN PRIMA (Alfia)", "PT LIVIA MANURI SEJATI (Aldi)",
+    "PT SUMBER BARU NIAGA (Tomi)", "PT ANDATU MULIA LESTARI (Muhammad Haris)", "PT JAVAS TRIPTA MANDALA (Roby)",
+    "PT KHINGGUAN (Ima)", "PT TIRTA PRIMA RASA (Dwi)", "PT VICTORIA CARE INDONESIA TBK (Saryono)",
+    "PT FARMA NIAGA DISTRIBUSINDO", "PT TARUNAKUSUMA (Wasik)", "PT SEKAWAN KOSMETIK WASANTARA (Ainun)",
+    "PT SAKTISETIA SANTOSA", "SINAR SURYA UTAMA", "CV SINAR TERANG (Gontor)", "PT SEMESTANUSTRA DISTRINDO (Imron)",
+    "PT PELITA NUSA RAYA (Yulio)", "PT Fastra Buana Kanfans (Abdul)", "UD PILAR MAKMUR", "PT WIRA SADANA LESTARI (Yono)",
+    "PT SAI (Yuli)", "Nova (Ari)", "PT SNACK (Rizky/Tris)", "UD ARJO JAYA (Aldi)", "COCA COLA",
+    "PT PERUSAHAAN DAGANG TEMPO", "UD KENCONO WUNGU (Opium)", "PT CIPTA NIAGA SEMESTA", "PUNGGING ELECTRIC",
+    "PT Unirama Duta Niaga (Amru)", "PT TUMBAKMAS NIAGA (Hasan)", "PT SUPRALITA MANDIRI (Farida)",
+    "PT Surya Gemilang Lestari Sentosa (Davina)", "PT ASIA PARAMITA INDAH (Andhie)", "PT PUJI SURYA INDAH (Qomari)",
+    "PT MANOHARA ADIKA DISTRINDO (Deni)", "UD SRI REJEKI (Sumar)", "CV SINAR ASIA PERKASA (Valentinus)",
+    "Toserba Sundra (Kaesang)", "PT PANCA PILAR (Aru)", "PT INDOMARCO ADI PRIMA", "PT KEVINDO PRATAMA PERKASA",
+    "PT ARTA DWITUNGGAL ABADI (Febri)", "DC NURUL JADID", "CV Belva", "PT HARSI PANGAN UTAMA", "BORNEO",
+    "EGIZ UMKM (Ibu Riz)", "UD Mentari Jaya Putra", "AIRA", "PT KIAN RAGAM DISTRIBUTOR", "OPIK PUTRA SNACK", "CV PUMA UTAMA MAKMUR ARTARIA",
+    "PT PRAKARSA JAYA SENTOSA", "HELLO (Memenuhi Selera Anda)", "HASAN MEJA", "PT CAMPINA ICE CREAM INDUSTRY",
+    "Yakult", "PT LUKINDARI PERMATA", "PT PARIMAS BOGA RAYA", "CV NUGRAHENI KARTIKA SARI DRINGU", "AZKA BAROKAH",
+    "REJEKI JAYA", "DWIKARYA INDONESIA MANDIRI", "PT GOLDEN AICE", "BERKAH HS", "PT Mitra Pharmasi Jaya",
+    "INDOWANGI PARFUM", "CV Argo Bentar Gemilang", "UD ANUGERAH JAYA PROBOLINGGO", "PT SUKANDA DJAYA", "CV KARTIKA JAYA MAKMUR",
+    "PT ULTRAJAYA MILK INDUSTRI & TRADING CO. TBK", "Bulog Indonesia", "UD HARIS JAYA PROBOLINGGO", "Jaya Subur",
+    "PADMATIRTA", "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG", "PT HADI CITRA CEMERLANG","PT PILAR UTAMA DISTRIBUSI", "MARGA NUSARAYA", "TOKO JELITA","PT FKS PANGAN NUSANTRA","SUMBER CIPTA MULTINIAGA","SUMBER CIPTA MULTINIAGA", "BSU"
 ]
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
@@ -461,10 +413,217 @@ with head_c2:
 
 st.divider()
 
-# (sisa UI: Home, Input Retur, List Retur tetap seperti sebelumnya, gunakan kode dari versi sebelumnya)
-# Untuk singkat, saya hanya menampilkan bagian Input Pembelian (tambah & edit) karena itu yang diperbarui.
+# ==========================================
+# MENU 0: HOME / DASHBOARD
+# ==========================================
+if menu_pilihan == "Home":
+    st.markdown("Dashboard Ringkasan Sistem")
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Selamat datang — ringkasan cepat sistem dan indikator utama.</p>", unsafe_allow_html=True)
+    
+    df_ret_home = ambil_data_retur()
+    df_sup_home = ambil_data_supplier()
+    df_inv_home = ambil_data_pembelian()
+    
+    # Metrics as cards
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        total_retur_val = df_ret_home["total"].sum() if not df_ret_home.empty and "total" in df_ret_home.columns else 0
+        st.markdown(f"<div class='metric-card'><div class='card-title'>Total Nilai Barang Retur</div><div style='font-size:18px;font-weight:700'>{format_rp(total_retur_val)}</div><div class='small-muted'>Periode: Semua</div></div>", unsafe_allow_html=True)
+    with col2:
+        total_tagihan_val = df_sup_home["tagihan"].sum() if not df_sup_home.empty and "tagihan" in df_sup_home.columns else 0
+        st.markdown(f"<div class='metric-card'><div class='card-title'>Total Tagihan Supplier</div><div style='font-size:18px;font-weight:700'>{format_rp(total_tagihan_val)}</div><div class='small-muted'>Segera cek jatuh tempo</div></div>", unsafe_allow_html=True)
+    with col3:
+        total_inv_val = df_inv_home["total_tagihan"].sum() if not df_inv_home.empty and "total_tagihan" in df_inv_home.columns else 0
+        st.markdown(f"<div class='metric-card'><div class='card-title'>Total Invoice Pembelian</div><div style='font-size:18px;font-weight:700'>{format_rp(total_inv_val)}</div><div class='small-muted'>Data transaksi masuk</div></div>", unsafe_allow_html=True)
 
-if menu_pilihan == "Input Pembelian":
+    st.divider()
+    
+    col_ch1, col_ch2 = st.columns(2)
+    with col_ch1:
+        st.markdown("Status Retur Barang")
+        if not df_ret_home.empty:
+            fig_ret = px.pie(df_ret_home, names='status', values='qty', title="Distribusi Status Retur", template=plotly_template)
+            fig_ret.update_layout(margin=dict(t=40,b=10,l=10,r=10))
+            st.plotly_chart(fig_ret, use_container_width=True)
+        else:
+            st.info("Belum ada data retur untuk divisualisasikan.")
+            
+    with col_ch2:
+        st.markdown("Status Pelunasan Invoice")
+        if not df_inv_home.empty:
+            fig_inv = px.pie(df_inv_home, names='status_lunas', values='total_tagihan', title="Distribusi Pembelian Supplier", template=plotly_template)
+            fig_inv.update_layout(margin=dict(t=40,b=10,l=10,r=10))
+            st.plotly_chart(fig_inv, use_container_width=True)
+        else:
+            st.info("Belum ada data invoice pembelian untuk divisualisasikan.")
+
+# ==========================================
+# MENU 1: INPUT RETUR
+# ==========================================
+elif menu_pilihan == "Input Retur":
+    st.markdown("Input Barang Retur")
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan barang retur baru ke database sistem.</p>", unsafe_allow_html=True)
+    
+    with st.form("form_input_retur", clear_on_submit=True):
+        fc1, fc2, fc3 = st.columns(3)
+        with fc1:
+            f_kode = st.text_input("Kode Barcode / SKU")
+            f_nama = st.text_input("Nama Barang")
+            f_qty = st.number_input("Quantity (Qty)", min_value=1, value=1)
+        with fc2:
+            f_hpp = st.number_input("Harga HPP (Rp)", min_value=0.0, value=0.0, step=100.0)
+            f_ket = st.selectbox("Keterangan Retur", ["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"])
+            f_ed = st.text_input("Tanggal ED (jika ada, misal: 31-12-2026 atau -)")
+        with fc3:
+            f_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+            f_status = st.selectbox("Status Retur", ["Pengajuan", "Sedang Diproses", "Sukses"])
+            f_tgl = st.date_input("Tanggal Input", value=datetime.date.today())
+        
+        submit_retur = st.form_submit_button("Simpan Data Retur", type="primary")
+        if submit_retur:
+            if not f_nama:
+                st.warning("Nama barang tidak boleh kosong!")
+            else:
+                try:
+                    total_val = float(f_qty) * float(f_hpp)
+                    payload_retur = {
+                        "kode": str(f_kode),
+                        "nama": str(f_nama),
+                        "qty": int(f_qty),
+                        "hpp": float(f_hpp),
+                        "total": float(total_val),
+                        "ket": str(f_ket),
+                        "ed": str(f_ed),
+                        "supplier": str(f_supplier),
+                        "status": str(f_status),
+                        "tgl_input": str(f_tgl)
+                    }
+                    supabase.table("barang_retur").insert(payload_retur).execute()
+                    st.success("Data barang retur berhasil disimpan!")
+                except Exception as e:
+                    st.error(f"Gagal menyimpan data retur: {e}")
+
+    st.divider()
+    st.markdown("Riwayat Retur Terbaru")
+    df_history = ambil_data_retur()
+    if not df_history.empty:
+        st.dataframe(df_history.tail(10).reset_index(drop=True), use_container_width=True, hide_index=True)
+    else:
+        st.info("Belum ada data retur.")
+
+# ==========================================
+# MENU 2: LIST RETUR
+# ==========================================
+elif menu_pilihan == "List Retur":
+    st.markdown("List Data Retur & Manajemen Edit")
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
+    
+    fl_c1, fl_c2, fl_c3 = st.columns(3)
+    with fl_c1:
+        opsi_supp_filter = ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER
+        pilih_sup_filter = st.selectbox("Filter Supplier", opsi_supp_filter)
+    with fl_c2:
+        pilih_status_filter = st.selectbox("Filter Status", ["SEMUA STATUS", "Pengajuan", "Sedang Diproses", "Sukses"])
+    with fl_c3:
+        cari_retur_input = st.text_input("Cari Data Retur (Kode / Nama / Keterangan)")
+
+    df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
+
+    if not df_retur_view.empty:
+        safe_name = pilih_sup_filter.replace(" ", "_").replace("/", "_")
+        pdf_bytes = generate_pdf_retur_custom(df_retur_view, pilih_sup_filter)
+        st.download_button(
+            label=f"Download Laporan PDF ({pilih_sup_filter})",
+            data=pdf_bytes,
+            file_name=f"Laporan_Retur_{safe_name}_{datetime.date.today()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
+        st.markdown("Edit Data Retur")
+        edited_df_retur = st.data_editor(
+            df_retur_view,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
+                "kode": st.column_config.TextColumn("Kode Barcode/SKU", width="medium"),
+                "nama": st.column_config.TextColumn("Nama Barang", width="large"),
+                "qty": st.column_config.NumberColumn("Qty", min_value=0, width="small"),
+                "hpp": st.column_config.NumberColumn("HPP (Rp)", format="Rp %'d", width="medium"),
+                "total": st.column_config.NumberColumn("Total (Rp)", format="Rp %'d", width="medium", disabled=True),
+                "ket": st.column_config.SelectboxColumn("Keterangan", options=["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"], required=True, width="small"),
+                "ed": st.column_config.TextColumn("Tanggal ED", width="small"),
+                "supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, required=True, width="large"),
+                "status": st.column_config.SelectboxColumn("Status", options=["Pengajuan", "Sedang Diproses", "Sukses"], required=True, width="medium"),
+                "tgl_input": st.column_config.TextColumn("Tanggal Input", width="small", disabled=True),
+            },
+            disabled=["id", "total", "tgl_input"],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_tabel_retur_v2"
+        )
+
+        st.markdown("Aksi Data Retur")
+        list_retur_ids = df_retur_view["id"].tolist()
+        selected_retur_ids = st.multiselect("Pilih ID Retur (untuk Hapus):", options=list_retur_ids, key="multiselect_retur_id")
+
+        col_r1, col_r2 = st.columns(2)
+        with col_r1:
+            if st.button("Simpan Perubahan Data Retur", type="primary", use_container_width=True):
+                count_upd_retur = 0
+                for _, row in edited_df_retur.iterrows():
+                    orig_row = df_retur_view.loc[df_retur_view["id"] == row["id"]]
+                    if not orig_row.empty:
+                        orig = orig_row.iloc[0]
+                        new_qty = float(row["qty"])
+                        new_hpp = float(row["hpp"])
+                        new_total = new_qty * new_hpp
+                        
+                        if (
+                            str(row["kode"]) != str(orig["kode"]) or
+                            str(row["nama"]) != str(orig["nama"]) or
+                            new_qty != float(orig["qty"]) or
+                            new_hpp != float(orig["hpp"]) or
+                            str(row["ket"]) != str(orig["ket"]) or
+                            str(row["ed"]) != str(orig["ed"]) or
+                            str(row["supplier"]) != str(orig["supplier"]) or
+                            str(row["status"]) != str(orig["status"])
+                        ):
+                            supabase.table("barang_retur").update({
+                                "kode": str(row["kode"]),
+                                "nama": str(row["nama"]),
+                                "qty": int(new_qty),
+                                "hpp": float(new_hpp),
+                                "total": float(new_total),
+                                "ket": str(row["ket"]),
+                                "ed": str(row["ed"]),
+                                "supplier": str(row["supplier"]),
+                                "status": str(row["status"])
+                            }).eq("id", int(row["id"])).execute()
+                            count_upd_retur += 1
+                if count_upd_retur > 0:
+                    st.success(f"Berhasil memperbarui {count_upd_retur} data retur!")
+                    st.experimental_rerun()
+                else:
+                    st.info("Tidak ada perubahan data retur yang terdeteksi.")
+        with col_r2:
+            if st.button("Hapus Retur Terpilih", type="secondary", use_container_width=True):
+                if not selected_retur_ids:
+                    st.warning("Pilih minimal satu ID retur yang ingin dihapus!")
+                else:
+                    for rid in selected_retur_ids:
+                        try:
+                            supabase.table("barang_retur").delete().eq("id", int(float(str(rid)))).execute()
+                        except (ValueError, TypeError):
+                            continue
+                    st.success("Data retur terpilih berhasil dihapus!")
+                    st.experimental_rerun()
+    else:
+        st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+
+# ==========================================
+# MENU 3: INPUT PEMBELIAN / INVOICE
+# ==========================================
+elif menu_pilihan == "Input Pembelian":
     st.markdown("Pencatatan & Manajemen Invoice Supplier")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota, bukti pembayaran, dan faktur pajak.</p>", unsafe_allow_html=True)
     
@@ -554,8 +713,7 @@ if menu_pilihan == "Input Pembelian":
                             "link_faktur_pajak": str(public_url_faktur_pajak),
                             "jenis_pajak": str(i_jenis_pajak)
                         }
-                        # use safe_insert so missing columns won't break the app
-                        safe_insert("data_pembelian", payload_inv)
+                        supabase.table("data_pembelian").insert(payload_inv).execute()
                         st.success("Data pembelian berhasil disimpan!")
                         st.experimental_rerun()
                     except Exception as e:
@@ -699,7 +857,7 @@ if menu_pilihan == "Input Pembelian":
                                 res_fp = supabase.storage.from_("bukti_pembelian").get_public_url(name_fp)
                                 public_url_faktur_pajak = res_fp if isinstance(res_fp, str) else res_fp.get("publicUrl", "")
 
-                            payload_upd = {
+                            supabase.table("data_pembelian").update({
                                 "no_invoice": str(e_invoice),
                                 "nama_supplier": str(e_supplier),
                                 "total_tagihan": float(e_tagihan),
@@ -710,8 +868,7 @@ if menu_pilihan == "Input Pembelian":
                                 "link_bayar": str(public_url_bayar),
                                 "link_faktur_pajak": str(public_url_faktur_pajak),
                                 "jenis_pajak": str(e_jenis_pajak)
-                            }
-                            safe_update("data_pembelian", payload_upd, "id", selected_id)
+                            }).eq("id", selected_id).execute()
 
                             st.success("Data pembelian berhasil diperbarui!")
                             st.experimental_rerun()
@@ -780,3 +937,116 @@ if menu_pilihan == "Input Pembelian":
             st.markdown(f"<div class='metric-card'><div class='card-title'>Grand Total Tagihan</div><div style='font-size:18px;font-weight:700'>{format_rp(grand_total_nilai)}</div></div>", unsafe_allow_html=True)
     else:
         st.info("Tidak ada data pembelian tercatat yang sesuai dengan filter.")
+
+# ==========================================
+# MENU 4: DATA SUPPLIER
+# ==========================================
+elif menu_pilihan == "Data Supplier":
+    st.markdown("Manajemen Data Supplier & Tagihan")
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Pengelolaan informasi profil supplier, status pajak, sistem pembayaran, dan monitoring tagihan.</p>", unsafe_allow_html=True)
+    
+    cari_sup = st.text_input("Cari Supplier (Nama / Jenis Pajak / Sistem Bayar)")
+    df_sup_view = ambil_data_supplier(cari_sup)
+    
+    if not df_sup_view.empty:
+        pdf_sup_bytes = generate_pdf_supplier(df_sup_view, "Semua Supplier Aktif")
+        st.download_button(
+            label="Download Laporan PDF Data Supplier",
+            data=pdf_sup_bytes,
+            file_name=f"Laporan_Supplier_{datetime.date.today()}.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
+
+        edited_df_sup = st.data_editor(
+            df_sup_view,
+            column_config={
+                "id": st.column_config.NumberColumn("ID", width="small", disabled=True),
+                "no_urut": st.column_config.NumberColumn("No Urut", width="small"),
+                "nama_supplier": st.column_config.TextColumn("Nama Supplier", width="large"),
+                "tagihan": st.column_config.NumberColumn("Tagihan (Rp)", format="Rp %'d", width="medium"),
+                "jenis_pajak": st.column_config.TextColumn("Jenis Pajak", width="small"),
+                "sistem_bayar": st.column_config.TextColumn("Sistem Bayar", width="medium"),
+                "jatuh_tempo": st.column_config.DateColumn("Jatuh Tempo", width="medium"),
+            },
+            disabled=["id"],
+            hide_index=True,
+            use_container_width=True,
+            key="editor_tabel_supplier"
+        )
+        
+        if st.button("Simpan Perubahan Supplier", type="primary"):
+            count_upd_sup = 0
+            for _, row in edited_df_sup.iterrows():
+                orig_row = df_sup_view.loc[df_sup_view["id"] == row["id"]]
+                if not orig_row.empty:
+                    orig = orig_row.iloc[0]
+                    if (
+                        str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
+                        float(row["tagihan"]) != float(orig["tagihan"]) or
+                        str(row["sistem_bayar"]) != str(orig["sistem_bayar"])
+                    ):
+                        supabase.table("data_supplier").update({
+                            "nama_supplier": str(row["nama_supplier"]),
+                            "tagihan": float(row["tagihan"]),
+                            "sistem_bayar": str(row["sistem_bayar"])
+                        }).eq("id", int(row["id"])).execute()
+                        count_upd_sup += 1
+            if count_upd_sup > 0:
+                st.success(f"Berhasil memperbarui {count_upd_sup} data supplier!")
+                st.experimental_rerun()
+            else:
+                st.info("Tidak ada perubahan data supplier.")
+    else:
+        st.info("Belum ada data supplier.")
+
+# ==========================================
+# MENU 5: LAPORAN
+# ==========================================
+elif menu_pilihan == "Laporan":
+    st.markdown("Pusat Laporan & Analisis Data")
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Analisis visual mendalam terkait performa retur, akumulasi tagihan supplier, dan tren pembelian.</p>", unsafe_allow_html=True)
+    
+    df_lap_retur = ambil_data_retur()
+    df_lap_sup = ambil_data_supplier()
+    
+    tab_l1, tab_l2 = st.tabs(["Analisis Retur", "Analisis Tagihan Supplier"])
+    
+    with tab_l1:
+        st.markdown("Top Supplier Berdasarkan Nilai Retur")
+        if not df_lap_retur.empty and "total" in df_lap_retur.columns:
+            df_grouped_retur = df_lap_retur.groupby("supplier")["total"].sum().reset_index().sort_values(by="total", ascending=False).head(10)
+            fig_bar_ret = px.bar(df_grouped_retur, x="supplier", y="total", title="10 Supplier dengan Nilai Retur Terbesar", text_auto=",", template=plotly_template)
+            fig_bar_ret.update_layout(xaxis_title=None, yaxis_title="Total (Rp)", margin=dict(t=40,b=30,l=10,r=10))
+            st.plotly_chart(fig_bar_ret, use_container_width=True)
+        else:
+            st.info("Data retur belum mencukupi.")
+            
+    with tab_l2:
+        st.markdown("Top Supplier Berdasarkan Tagihan Terbesar")
+        if not df_lap_sup.empty and "tagihan" in df_lap_sup.columns:
+            df_grouped_sup = df_lap_sup.sort_values(by="tagihan", ascending=False).head(10)
+            fig_bar_sup = px.bar(df_grouped_sup, x="nama_supplier", y="tagihan", title="10 Supplier dengan Tagihan Tertinggi", text_auto=",", template=plotly_template)
+            fig_bar_sup.update_layout(xaxis_title=None, yaxis_title="Tagihan (Rp)", margin=dict(t=40,b=30,l=10,r=10))
+            st.plotly_chart(fig_bar_sup, use_container_width=True)
+        else:
+            st.info("Data supplier belum mencukupi.")
+
+# ==========================================
+# MENU 6: PENGATURAN
+# ==========================================
+elif menu_pilihan == "Pengaturan":
+    st.markdown("Pengaturan Sistem")
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Konfigurasi akun, informasi toko, dan preferensi aplikasi.</p>", unsafe_allow_html=True)
+    
+    st.markdown("Profil Toko")
+    st.text_input("Nama Toko", value="Toserba Nurja Berkah", disabled=True)
+    st.text_input("Lokasi / Alamat", value="Probolinggo, Jawa Timur", disabled=True)
+    st.text_input("Sistem Versi", value="v2.5.0 Production", disabled=True)
+    
+    st.divider()
+    st.markdown("Preferensi Tampilan")
+    mode_setting = st.selectbox("Pilih Tema Utama", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1)
+    if st.button("Terapkan Tema", type="primary"):
+        st.session_state.theme = "Terang" if "Terang" in mode_setting else "Gelap"
+        st.success("Tema berhasil diperbarui! Silakan refresh halaman jika diperlukan.")

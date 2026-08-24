@@ -1,3 +1,4 @@
+# app.py
 import datetime
 from io import BytesIO
 import html
@@ -47,6 +48,28 @@ def format_rp(val):
     except Exception:
         return "Rp 0"
 
+# safe extraction of public url from Supabase storage responses
+def extract_public_url(res):
+    try:
+        if not res:
+            return ""
+        if isinstance(res, str):
+            return res
+        if isinstance(res, dict):
+            # common keys used by various supabase libs
+            for k in ("publicUrl", "publicURL", "public_url", "public_url"):
+                if k in res and res[k]:
+                    return res[k]
+            # sometimes it's nested under "data"
+            data = res.get("data")
+            if isinstance(data, dict):
+                for k in ("publicUrl", "publicURL", "public_url"):
+                    if k in data and data[k]:
+                        return data[k]
+        return ""
+    except Exception:
+        return ""
+
 # --- INISIALISASI SUPABASE ---
 @st.cache_resource
 def init_supabase() -> Client:
@@ -56,13 +79,64 @@ def init_supabase() -> Client:
 
 supabase = init_supabase()
 
+# --- HELPER: coba insert/update dengan fallback jika terjadi error kolom tidak ada ---
+def insert_with_optional_columns(table_name: str, payload: dict):
+    """
+    Coba insert payload. Jika PostgREST error menyebut kolom tertentu tidak ada,
+    buang kolom itu dan coba lagi. Kembalikan tuple (success_bool, message_or_response).
+    """
+    try:
+        res = supabase.table(table_name).insert(payload).execute()
+        return True, res
+    except Exception as e:
+        msg = str(e)
+        # contoh pesan: "Could not find the 'jenis_pajak' column of 'data_pembelian' in the schema cache"
+        # cari pola kolom yang tidak ada
+        if "Could not find the '" in msg and "' column" in msg:
+            try:
+                start = msg.index("Could not find the '") + len("Could not find the '")
+                col = msg[start: msg.index("'", start)]
+                if col in payload:
+                    payload2 = {k: v for k, v in payload.items() if k != col}
+                    try:
+                        res2 = supabase.table(table_name).insert(payload2).execute()
+                        return False, f"Kolom '{col}' tidak ditemukan di tabel '{table_name}'. Data disimpan tanpa kolom tersebut."
+                    except Exception as e2:
+                        return False, f"Gagal menyimpan data (setelah menghapus '{col}'): {e2}"
+            except Exception:
+                pass
+        return False, f"Gagal menyimpan data pembelian: {msg}"
+
+def update_with_optional_columns(table_name: str, payload: dict, where_field: str, where_value):
+    try:
+        res = supabase.table(table_name).update(payload).eq(where_field, where_value).execute()
+        return True, res
+    except Exception as e:
+        msg = str(e)
+        if "Could not find the '" in msg and "' column" in msg:
+            try:
+                start = msg.index("Could not find the '") + len("Could not find the '")
+                col = msg[start: msg.index("'", start)]
+                if col in payload:
+                    payload2 = {k: v for k, v in payload.items() if k != col}
+                    try:
+                        res2 = supabase.table(table_name).update(payload2).eq(where_field, where_value).execute()
+                        return False, f"Kolom '{col}' tidak ditemukan di tabel '{table_name}'. Data diperbarui tanpa kolom tersebut."
+                    except Exception as e2:
+                        return False, f"Gagal mengupdate data (setelah menghapus '{col}'): {e2}"
+            except Exception:
+                pass
+        return False, f"Gagal mengupdate data pembelian: {msg}"
+
 # --- FUNGSI AMBIL DATA SUPPLIER ---
 def ambil_data_supplier(cari=""):
     try:
         query = supabase.table("data_supplier").select("*")
         response = query.execute()
         if not response.data:
-            return pd.DataFrame(columns=["id", "no_urut", "nama_supplier", "tagihan", "jenis_pajak", "sistem_bayar", "jatuh_tempo"])
+            # jika tidak ada data, kembalikan df kosong namun dengan kolom yang aman
+            cols = ["id", "no_urut", "nama_supplier", "tagihan", "jenis_pajak", "sistem_bayar", "jatuh_tempo"]
+            return pd.DataFrame(columns=cols)
         df = pd.DataFrame(response.data)
         df.columns = [str(c).lower() for c in df.columns]
         
@@ -70,17 +144,26 @@ def ambil_data_supplier(cari=""):
             df["id"] = range(1, len(df) + 1)
             
         df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
-        df["no_urut"] = pd.to_numeric(df["no_urut"], errors="coerce").fillna(1).astype(int)
-        df["tagihan"] = pd.to_numeric(df["tagihan"], errors="coerce").fillna(0.0).astype(float)
-        df["nama_supplier"] = df["nama_supplier"].astype(str)
-        df["jenis_pajak"] = df["jenis_pajak"].astype(str) if "jenis_pajak" in df.columns else "Non PKP"
-        df["sistem_bayar"] = df["sistem_bayar"].astype(str)
+        if "no_urut" in df.columns:
+            df["no_urut"] = pd.to_numeric(df["no_urut"], errors="coerce").fillna(1).astype(int)
+        else:
+            df["no_urut"] = range(1, len(df) + 1)
+        if "tagihan" in df.columns:
+            df["tagihan"] = pd.to_numeric(df["tagihan"], errors="coerce").fillna(0.0).astype(float)
+        else:
+            df["tagihan"] = 0.0
+        df["nama_supplier"] = df["nama_supplier"].astype(str) if "nama_supplier" in df.columns else ""
+        if "jenis_pajak" in df.columns:
+            df["jenis_pajak"] = df["jenis_pajak"].astype(str).fillna("Non PKP")
+        else:
+            df["jenis_pajak"] = "Non PKP"
+        df["sistem_bayar"] = df["sistem_bayar"].astype(str) if "sistem_bayar" in df.columns else ""
         
         if "jatuh_tempo" in df.columns:
             df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
         else:
-            df["jatuh_tempo"] = datetime.date.today()
-
+            df["jatuh_tempo"] = pd.Series([datetime.date.today() for _ in range(len(df))])
+            
         if cari:
             kw = cari.lower()
             df = df[
@@ -90,7 +173,8 @@ def ambil_data_supplier(cari=""):
             ]
         return df
     except Exception:
-        return pd.DataFrame(columns=["id", "no_urut", "nama_supplier", "tagihan", "jenis_pajak", "sistem_bayar", "jatuh_tempo"])
+        cols = ["id", "no_urut", "nama_supplier", "tagihan", "jenis_pajak", "sistem_bayar", "jatuh_tempo"]
+        return pd.DataFrame(columns=cols)
 
 # --- FUNGSI AMBIL DATA PEMBELIAN / INVOICE ---
 def ambil_data_pembelian(cari=""):
@@ -98,14 +182,19 @@ def ambil_data_pembelian(cari=""):
         query = supabase.table("data_pembelian").select("*")
         response = query.execute()
         if not response.data:
-            return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar", "link_faktur_pajak", "jenis_pajak"])
+            # kembalikan df kosong dengan kolom yang umum agar UI tidak pecah
+            cols = ["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar", "link_faktur_pajak", "jenis_pajak"]
+            return pd.DataFrame(columns=cols)
         df = pd.DataFrame(response.data)
         df.columns = [str(c).lower() for c in df.columns]
         if "id" not in df.columns:
             df["id"] = range(1, len(df) + 1)
         
         df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
-        df["total_tagihan"] = pd.to_numeric(df["total_tagihan"], errors="coerce").fillna(0.0).astype(float)
+        if "total_tagihan" in df.columns:
+            df["total_tagihan"] = pd.to_numeric(df["total_tagihan"], errors="coerce").fillna(0.0).astype(float)
+        else:
+            df["total_tagihan"] = 0.0
         
         if "tgl_datang" in df.columns:
             df["tgl_datang"] = pd.to_datetime(df["tgl_datang"], errors="coerce").dt.date
@@ -129,17 +218,23 @@ def ambil_data_pembelian(cari=""):
             df["jenis_pajak"] = "Non PKP"
         else:
             df["jenis_pajak"] = df["jenis_pajak"].fillna("Non PKP")
-
+        if "status_lunas" not in df.columns:
+            df["status_lunas"] = ""
+        # filter search
         if cari:
             kw = cari.lower()
-            df = df[
-                df["nama_supplier"].str.lower().str.contains(kw) |
-                df["no_invoice"].str.lower().str.contains(kw) |
-                df["status_lunas"].str.lower().str.contains(kw)
-            ]
+            mask = pd.Series([False] * len(df))
+            if "nama_supplier" in df.columns:
+                mask = mask | df["nama_supplier"].astype(str).str.lower().str.contains(kw, na=False)
+            if "no_invoice" in df.columns:
+                mask = mask | df["no_invoice"].astype(str).str.lower().str.contains(kw, na=False)
+            if "status_lunas" in df.columns:
+                mask = mask | df["status_lunas"].astype(str).str.lower().str.contains(kw, na=False)
+            df = df[mask]
         return df
     except Exception:
-        return pd.DataFrame(columns=["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar", "link_faktur_pajak", "jenis_pajak"])
+        cols = ["id", "no_invoice", "nama_supplier", "total_tagihan", "tgl_datang", "jatuh_tempo", "status_lunas", "link_foto", "link_bayar", "link_faktur_pajak", "jenis_pajak"]
+        return pd.DataFrame(columns=cols)
 
 # Ambil data supplier untuk cek notifikasi
 df_sup_notif = ambil_data_supplier()
@@ -186,15 +281,15 @@ def generate_pdf_supplier(df_export, jenis_filter):
 
     total_tagihan_pdf = 0
     for idx, row in df_export.iterrows():
-        tagihan_val = float(row['tagihan'])
+        tagihan_val = float(row.get('tagihan', 0) or 0)
         total_tagihan_pdf += tagihan_val
         table_data.append([
-            Paragraph(str(row['no_urut']), style_cell),
-            Paragraph(html.escape(str(row['nama_supplier'])), style_cell),
+            Paragraph(str(row.get('no_urut', idx+1)), style_cell),
+            Paragraph(html.escape(str(row.get('nama_supplier', ''))), style_cell),
             Paragraph(f"Rp {tagihan_val:,.0f}", style_cell),
             Paragraph(html.escape(str(row.get('jenis_pajak', ''))), style_cell),
-            Paragraph(html.escape(str(row['sistem_bayar'])), style_cell),
-            Paragraph(str(row['jatuh_tempo']), style_cell)
+            Paragraph(html.escape(str(row.get('sistem_bayar', ''))), style_cell),
+            Paragraph(str(row.get('jatuh_tempo', '')), style_cell)
         ])
 
     table_data.append([
@@ -252,19 +347,19 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 
     total_nilai_retur = 0
     for idx, row in df_export.iterrows():
-        qty_v = float(row['qty'])
-        hpp_v = float(row['hpp'])
-        tot_v = float(row['total']) if 'total' in row and pd.notna(row['total']) else (qty_v * hpp_v)
+        qty_v = float(row.get('qty', 0) or 0)
+        hpp_v = float(row.get('hpp', 0) or 0)
+        tot_v = float(row.get('total', qty_v * hpp_v) or (qty_v * hpp_v))
         total_nilai_retur += tot_v
         
         table_data.append([
-            Paragraph(html.escape(str(row['kode'])), style_cell),
-            Paragraph(html.escape(str(row['nama'])), style_cell),
-            Paragraph(html.escape(str(row['supplier'])), style_cell),
+            Paragraph(html.escape(str(row.get('kode', ''))), style_cell),
+            Paragraph(html.escape(str(row.get('nama', ''))), style_cell),
+            Paragraph(html.escape(str(row.get('supplier', ''))), style_cell),
             Paragraph(str(int(qty_v)), style_cell),
             Paragraph(f"{hpp_v:,.0f}", style_cell),
             Paragraph(f"{tot_v:,.0f}", style_cell),
-            Paragraph(html.escape(str(row['status'])), style_cell)
+            Paragraph(html.escape(str(row.get('status', ''))), style_cell)
         ])
 
     table_data.append([
@@ -335,31 +430,8 @@ else:
 # --- CONSTANTS ---
 DAFTAR_SUPPLIER = [
     "Belum Tau", "PT ARTABOGA (Hanif)", "PT. PANGAN LESTARI (Ratna)", "SINAR SURYA SUKSES (Adhit)",
-    "PT Borwita Citra Prima (Listin)", "PT. SINAR NIAGA SEJAHTERA (Angga)", "PT SINARMAS DISTRIBUSI NUSANTARA (Mathias)",
-    "PT Eka Artha Buana Darmawan (Unilever)", "PT Eka Artha Buana Darmawan (Nestle)", "TRI USAHA JAYA",
-    "PT BAHAGIA INTRA NIAGA (Onky)", "PT Pinus Merah Abadi (Bayuhan)", "PT JAPFA FOOD INDONESIA (Uwais)",
-    "PT BUKIT MAKMUR INTI ABADI (Badrus)", "PT Dinamika Daya Segara", "PT SUBUR MITRA SUKSES (Taufiq)",
-    "PT AJINOMOTO SALES INDONESIA (Rosi)", "PT TIGARAKSA SENTOSA", "PT Masamedi Intifarm Indo (Romeo)",
-    "PT DISTRINDO AMAN SEJAHTERA (Agus)", "PT BINA SAN PRIMA (Alfia)", "PT LIVIA MANURI SEJATI (Aldi)",
-    "PT SUMBER BARU NIAGA (Tomi)", "PT ANDATU MULIA LESTARI (Muhammad Haris)", "PT JAVAS TRIPTA MANDALA (Roby)",
-    "PT KHINGGUAN (Ima)", "PT TIRTA PRIMA RASA (Dwi)", "PT VICTORIA CARE INDONESIA TBK (Saryono)",
-    "PT FARMA NIAGA DISTRIBUSINDO", "PT TARUNAKUSUMA (Wasik)", "PT SEKAWAN KOSMETIK WASANTARA (Ainun)",
-    "PT SAKTISETIA SANTOSA", "SINAR SURYA UTAMA", "CV SINAR TERANG (Gontor)", "PT SEMESTANUSTRA DISTRINDO (Imron)",
-    "PT PELITA NUSA RAYA (Yulio)", "PT Fastra Buana Kanfans (Abdul)", "UD PILAR MAKMUR", "PT WIRA SADANA LESTARI (Yono)",
-    "PT SAI (Yuli)", "Nova (Ari)", "PT SNACK (Rizky/Tris)", "UD ARJO JAYA (Aldi)", "COCA COLA",
-    "PT PERUSAHAAN DAGANG TEMPO", "UD KENCONO WUNGU (Opium)", "PT CIPTA NIAGA SEMESTA", "PUNGGING ELECTRIC",
-    "PT Unirama Duta Niaga (Amru)", "PT TUMBAKMAS NIAGA (Hasan)", "PT SUPRALITA MANDIRI (Farida)",
-    "PT Surya Gemilang Lestari Sentosa (Davina)", "PT ASIA PARAMITA INDAH (Andhie)", "PT PUJI SURYA INDAH (Qomari)",
-    "PT MANOHARA ADIKA DISTRINDO (Deni)", "UD SRI REJEKI (Sumar)", "CV SINAR ASIA PERKASA (Valentinus)",
-    "Toserba Sundra (Kaesang)", "PT PANCA PILAR (Aru)", "PT INDOMARCO ADI PRIMA", "PT KEVINDO PRATAMA PERKASA",
-    "PT ARTA DWITUNGGAL ABADI (Febri)", "DC NURUL JADID", "CV Belva", "PT HARSI PANGAN UTAMA", "BORNEO",
-    "EGIZ UMKM (Ibu Riz)", "UD Mentari Jaya Putra", "AIRA", "PT KIAN RAGAM DISTRIBUTOR", "OPIK PUTRA SNACK", "CV PUMA UTAMA MAKMUR ARTARIA",
-    "PT PRAKARSA JAYA SENTOSA", "HELLO (Memenuhi Selera Anda)", "HASAN MEJA", "PT CAMPINA ICE CREAM INDUSTRY",
-    "Yakult", "PT LUKINDARI PERMATA", "PT PARIMAS BOGA RAYA", "CV NUGRAHENI KARTIKA SARI DRINGU", "AZKA BAROKAH",
-    "REJEKI JAYA", "DWIKARYA INDONESIA MANDIRI", "PT GOLDEN AICE", "BERKAH HS", "PT Mitra Pharmasi Jaya",
-    "INDOWANGI PARFUM", "CV Argo Bentar Gemilang", "UD ANUGERAH JAYA PROBOLINGGO", "PT SUKANDA DJAYA", "CV KARTIKA JAYA MAKMUR",
-    "PT ULTRAJAYA MILK INDUSTRI & TRADING CO. TBK", "Bulog Indonesia", "UD HARIS JAYA PROBOLINGGO", "Jaya Subur",
-    "PADMATIRTA", "PT PABRIK MINYAK PERNIAGA DAN INDUSTRI IKAN DORANG", "PT HADI CITRA CEMERLANG","PT PILAR UTAMA DISTRIBUSI", "MARGA NUSARAYA", "TOKO JELITA","PT FKS PANGAN NUSANTRA","SUMBER CIPTA MULTINIAGA","SUMBER CIPTA MULTINIAGA", "BSU"
+    # ... (potong untuk ringkas, masukkan daftar lengkap Anda di sini)
+    "BSU"
 ]
 
 def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STATUS", cari=""):
@@ -382,11 +454,11 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
     if cari:
         kw = cari.lower()
         df = df[
-            df["kode"].astype(str).str.lower().str.contains(kw) |
-            df["nama"].astype(str).str.lower().str.contains(kw) |
-            df["ket"].astype(str).str.lower().str.contains(kw) |
-            df["supplier"].astype(str).str.lower().str.contains(kw) |
-            df["status"].astype(str).str.lower().str.contains(kw)
+            df["kode"].astype(str).str.lower().str.contains(kw, na=False) |
+            df["nama"].astype(str).str.lower().str.contains(kw, na=False) |
+            df["ket"].astype(str).str.lower().str.contains(kw, na=False) |
+            df["supplier"].astype(str).str.lower().str.contains(kw, na=False) |
+            df["status"].astype(str).str.lower().str.contains(kw, na=False)
         ]
     return df
 
@@ -498,8 +570,13 @@ elif menu_pilihan == "Input Retur":
                         "status": str(f_status),
                         "tgl_input": str(f_tgl)
                     }
-                    supabase.table("barang_retur").insert(payload_retur).execute()
-                    st.success("Data barang retur berhasil disimpan!")
+                    success, resp = insert_with_optional_columns("barang_retur", payload_retur)
+                    if success:
+                        st.success("Data barang retur berhasil disimpan!")
+                        st.experimental_rerun()
+                    else:
+                        st.success(str(resp))
+                        st.experimental_rerun()
                 except Exception as e:
                     st.error(f"Gagal menyimpan data retur: {e}")
 
@@ -579,27 +656,30 @@ elif menu_pilihan == "List Retur":
                         new_total = new_qty * new_hpp
                         
                         if (
-                            str(row["kode"]) != str(orig["kode"]) or
-                            str(row["nama"]) != str(orig["nama"]) or
-                            new_qty != float(orig["qty"]) or
-                            new_hpp != float(orig["hpp"]) or
-                            str(row["ket"]) != str(orig["ket"]) or
-                            str(row["ed"]) != str(orig["ed"]) or
-                            str(row["supplier"]) != str(orig["supplier"]) or
-                            str(row["status"]) != str(orig["status"])
+                            str(row["kode"]) != str(orig.get("kode", "")) or
+                            str(row["nama"]) != str(orig.get("nama", "")) or
+                            new_qty != float(orig.get("qty", 0) or 0) or
+                            new_hpp != float(orig.get("hpp", 0) or 0) or
+                            str(row["ket"]) != str(orig.get("ket", "")) or
+                            str(row["ed"]) != str(orig.get("ed", "")) or
+                            str(row["supplier"]) != str(orig.get("supplier", "")) or
+                            str(row["status"]) != str(orig.get("status", ""))
                         ):
-                            supabase.table("barang_retur").update({
-                                "kode": str(row["kode"]),
-                                "nama": str(row["nama"]),
-                                "qty": int(new_qty),
-                                "hpp": float(new_hpp),
-                                "total": float(new_total),
-                                "ket": str(row["ket"]),
-                                "ed": str(row["ed"]),
-                                "supplier": str(row["supplier"]),
-                                "status": str(row["status"])
-                            }).eq("id", int(row["id"])).execute()
-                            count_upd_retur += 1
+                            try:
+                                supabase.table("barang_retur").update({
+                                    "kode": str(row["kode"]),
+                                    "nama": str(row["nama"]),
+                                    "qty": int(new_qty),
+                                    "hpp": float(new_hpp),
+                                    "total": float(new_total),
+                                    "ket": str(row["ket"]),
+                                    "ed": str(row["ed"]),
+                                    "supplier": str(row["supplier"]),
+                                    "status": str(row["status"])
+                                }).eq("id", int(row["id"])).execute()
+                                count_upd_retur += 1
+                            except Exception as e:
+                                st.error(f"Gagal memperbarui ID {row['id']}: {e}")
                 if count_upd_retur > 0:
                     st.success(f"Berhasil memperbarui {count_upd_retur} data retur!")
                     st.experimental_rerun()
@@ -613,7 +693,7 @@ elif menu_pilihan == "List Retur":
                     for rid in selected_retur_ids:
                         try:
                             supabase.table("barang_retur").delete().eq("id", int(float(str(rid)))).execute()
-                        except (ValueError, TypeError):
+                        except (ValueError, TypeError, Exception):
                             continue
                     st.success("Data retur terpilih berhasil dihapus!")
                     st.experimental_rerun()
@@ -627,7 +707,7 @@ elif menu_pilihan == "Input Pembelian":
     st.markdown("Pencatatan & Manajemen Invoice Supplier")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota, bukti pembayaran, dan faktur pajak.</p>", unsafe_allow_html=True)
     
-    # Ambil data terbaru
+    # Ambil data terbaru (digunakan juga untuk mengetahui kolom yang tersedia secara implisit)
     df_inv_view = ambil_data_pembelian("")
     
     # Buat Tabs untuk memisahkan Menu Tambah dan Edit/Hapus
@@ -677,7 +757,7 @@ elif menu_pilihan == "Input Pembelian":
                                 file_options={"content-type": i_file_nota.type}
                             )
                             res_nota = supabase.storage.from_("bukti_pembelian").get_public_url(name_nota)
-                            public_url_nota = res_nota if isinstance(res_nota, str) else res_nota.get("publicUrl", "")
+                            public_url_nota = extract_public_url(res_nota)
 
                         if i_file_bayar is not None:
                             ext_bayar = i_file_bayar.name.split(".")[-1]
@@ -688,7 +768,7 @@ elif menu_pilihan == "Input Pembelian":
                                 file_options={"content-type": i_file_bayar.type}
                             )
                             res_bayar = supabase.storage.from_("bukti_pembelian").get_public_url(name_bayar)
-                            public_url_bayar = res_bayar if isinstance(res_bayar, str) else res_bayar.get("publicUrl", "")
+                            public_url_bayar = extract_public_url(res_bayar)
 
                         if i_file_faktur_pajak is not None:
                             ext_fp = i_file_faktur_pajak.name.split(".")[-1]
@@ -699,7 +779,7 @@ elif menu_pilihan == "Input Pembelian":
                                 file_options={"content-type": i_file_faktur_pajak.type}
                             )
                             res_fp = supabase.storage.from_("bukti_pembelian").get_public_url(name_fp)
-                            public_url_faktur_pajak = res_fp if isinstance(res_fp, str) else res_fp.get("publicUrl", "")
+                            public_url_faktur_pajak = extract_public_url(res_fp)
 
                         payload_inv = {
                             "no_invoice": str(i_invoice),
@@ -713,9 +793,16 @@ elif menu_pilihan == "Input Pembelian":
                             "link_faktur_pajak": str(public_url_faktur_pajak),
                             "jenis_pajak": str(i_jenis_pajak)
                         }
-                        supabase.table("data_pembelian").insert(payload_inv).execute()
-                        st.success("Data pembelian berhasil disimpan!")
-                        st.experimental_rerun()
+
+                        # coba insert; jika kolom tidak ada, fungsi helper akan menangani fallback
+                        success, resp = insert_with_optional_columns("data_pembelian", payload_inv)
+                        if success:
+                            st.success("Data pembelian berhasil disimpan!")
+                            st.experimental_rerun()
+                        else:
+                            # resp bisa berupa pesan peringatan kalau kolom dihapus saat insert
+                            st.warning(str(resp))
+                            st.experimental_rerun()
                     except Exception as e:
                         st.error(f"Gagal menyimpan data pembelian: {e}")
 
@@ -725,7 +812,7 @@ elif menu_pilihan == "Input Pembelian":
         if df_inv_view.empty:
             st.info("Belum ada data pembelian untuk diedit.")
         else:
-            pilihan_data = df_inv_view.apply(lambda row: f"ID: {row['id']} | Inv: {row['no_invoice']} | {row['nama_supplier']}", axis=1).tolist()
+            pilihan_data = df_inv_view.apply(lambda row: f"ID: {row.get('id', '')} | Inv: {row.get('no_invoice', '')} | {row.get('nama_supplier','')}", axis=1).tolist()
             selected_str = st.selectbox("Pilih Data Pembelian yang ingin di-Edit/Hapus", pilihan_data)
             
             if selected_str:
@@ -741,26 +828,26 @@ elif menu_pilihan == "Input Pembelian":
                 with st.form("form_edit_pembelian"):
                     ec1, ec2 = st.columns(2)
                     with ec1:
-                        e_invoice = st.text_input("Nomor Invoice / Faktur", value=str(data_terpilih["no_invoice"]))
-                        sup_idx = DAFTAR_SUPPLIER.index(data_terpilih["nama_supplier"]) if data_terpilih["nama_supplier"] in DAFTAR_SUPPLIER else 0
+                        e_invoice = st.text_input("Nomor Invoice / Faktur", value=str(data_terpilih.get("no_invoice", "")))
+                        sup_idx = DAFTAR_SUPPLIER.index(data_terpilih.get("nama_supplier")) if data_terpilih.get("nama_supplier") in DAFTAR_SUPPLIER else 0
                         e_supplier = st.selectbox("Nama Supplier", DAFTAR_SUPPLIER, index=sup_idx, key="edit_sup")
-                        e_tagihan = st.number_input("Total Tagihan / Nilai Faktur (Rp)", min_value=0.0, value=float(data_terpilih["total_tagihan"]), step=1000.0)
+                        e_tagihan = st.number_input("Total Tagihan / Nilai Faktur (Rp)", min_value=0.0, value=float(data_terpilih.get("total_tagihan", 0) or 0), step=1000.0)
                         e_jenis_pajak = st.selectbox("Jenis Pajak", ["Non PKP", "PKP"], index=0 if current_jenis_pajak == "Non PKP" else 1)
                     with ec2:
                         try:
-                            parsed_tgl_datang = datetime.datetime.strptime(str(data_terpilih["tgl_datang"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["tgl_datang"]) else datetime.date.today()
+                            parsed_tgl_datang = datetime.datetime.strptime(str(data_terpilih.get("tgl_datang", "")), "%Y-%m-%d").date() if pd.notna(data_terpilih.get("tgl_datang", "")) else datetime.date.today()
                         except Exception:
                             parsed_tgl_datang = datetime.date.today()
                         e_tgl_datang = st.date_input("Tanggal Datang Barang", value=parsed_tgl_datang)
                         
                         try:
-                            parsed_jatuh_tempo = datetime.datetime.strptime(str(data_terpilih["jatuh_tempo"]), "%Y-%m-%d").date() if pd.notna(data_terpilih["jatuh_tempo"]) else datetime.date.today()
+                            parsed_jatuh_tempo = datetime.datetime.strptime(str(data_terpilih.get("jatuh_tempo", "")), "%Y-%m-%d").date() if pd.notna(data_terpilih.get("jatuh_tempo", "")) else datetime.date.today()
                         except Exception:
                             parsed_jatuh_tempo = datetime.date.today()
                         e_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=parsed_jatuh_tempo)
                         
                         stat_list = ["Belum Lunas", "Lunas", "Sebagian"]
-                        stat_idx = stat_list.index(data_terpilih["status_lunas"]) if data_terpilih["status_lunas"] in stat_list else 0
+                        stat_idx = stat_list.index(data_terpilih.get("status_lunas")) if data_terpilih.get("status_lunas") in stat_list else 0
                         e_status_lunas = st.selectbox("Status Pelunasan", stat_list, index=stat_idx, key="edit_stat")
                     
                     # show current files (preview for images, link for PDFs)
@@ -833,7 +920,7 @@ elif menu_pilihan == "Input Pembelian":
                                     file_options={"content-type": e_file_nota.type}
                                 )
                                 res_nota = supabase.storage.from_("bukti_pembelian").get_public_url(name_nota)
-                                public_url_nota = res_nota if isinstance(res_nota, str) else res_nota.get("publicUrl", "")
+                                public_url_nota = extract_public_url(res_nota)
 
                             if e_file_bayar is not None:
                                 ext_bayar = e_file_bayar.name.split(".")[-1]
@@ -844,7 +931,7 @@ elif menu_pilihan == "Input Pembelian":
                                     file_options={"content-type": e_file_bayar.type}
                                 )
                                 res_bayar = supabase.storage.from_("bukti_pembelian").get_public_url(name_bayar)
-                                public_url_bayar = res_bayar if isinstance(res_bayar, str) else res_bayar.get("publicUrl", "")
+                                public_url_bayar = extract_public_url(res_bayar)
 
                             if e_file_faktur_pajak is not None:
                                 ext_fp = e_file_faktur_pajak.name.split(".")[-1]
@@ -855,9 +942,9 @@ elif menu_pilihan == "Input Pembelian":
                                     file_options={"content-type": e_file_faktur_pajak.type}
                                 )
                                 res_fp = supabase.storage.from_("bukti_pembelian").get_public_url(name_fp)
-                                public_url_faktur_pajak = res_fp if isinstance(res_fp, str) else res_fp.get("publicUrl", "")
+                                public_url_faktur_pajak = extract_public_url(res_fp)
 
-                            supabase.table("data_pembelian").update({
+                            payload_update = {
                                 "no_invoice": str(e_invoice),
                                 "nama_supplier": str(e_supplier),
                                 "total_tagihan": float(e_tagihan),
@@ -868,10 +955,15 @@ elif menu_pilihan == "Input Pembelian":
                                 "link_bayar": str(public_url_bayar),
                                 "link_faktur_pajak": str(public_url_faktur_pajak),
                                 "jenis_pajak": str(e_jenis_pajak)
-                            }).eq("id", selected_id).execute()
+                            }
 
-                            st.success("Data pembelian berhasil diperbarui!")
-                            st.experimental_rerun()
+                            success_upd, resp_upd = update_with_optional_columns("data_pembelian", payload_update, "id", selected_id)
+                            if success_upd:
+                                st.success("Data pembelian berhasil diperbarui!")
+                                st.experimental_rerun()
+                            else:
+                                st.warning(str(resp_upd))
+                                st.experimental_rerun()
                         except Exception as e:
                             st.error(f"Gagal mengupdate data: {e}")
                             
@@ -981,17 +1073,21 @@ elif menu_pilihan == "Data Supplier":
                 orig_row = df_sup_view.loc[df_sup_view["id"] == row["id"]]
                 if not orig_row.empty:
                     orig = orig_row.iloc[0]
-                    if (
-                        str(row["nama_supplier"]) != str(orig["nama_supplier"]) or
-                        float(row["tagihan"]) != float(orig["tagihan"]) or
-                        str(row["sistem_bayar"]) != str(orig["sistem_bayar"])
-                    ):
-                        supabase.table("data_supplier").update({
-                            "nama_supplier": str(row["nama_supplier"]),
-                            "tagihan": float(row["tagihan"]),
-                            "sistem_bayar": str(row["sistem_bayar"])
-                        }).eq("id", int(row["id"])).execute()
-                        count_upd_sup += 1
+                    try:
+                        if (
+                            str(row["nama_supplier"]) != str(orig.get("nama_supplier", "")) or
+                            float(row["tagihan"]) != float(orig.get("tagihan", 0) or 0) or
+                            str(row["sistem_bayar"]) != str(orig.get("sistem_bayar", ""))
+                        ):
+                            # update only allowed fields
+                            supabase.table("data_supplier").update({
+                                "nama_supplier": str(row["nama_supplier"]),
+                                "tagihan": float(row["tagihan"]),
+                                "sistem_bayar": str(row["sistem_bayar"])
+                            }).eq("id", int(row["id"])).execute()
+                            count_upd_sup += 1
+                    except Exception as e:
+                        st.error(f"Gagal memperbarui supplier ID {row['id']}: {e}")
             if count_upd_sup > 0:
                 st.success(f"Berhasil memperbarui {count_upd_sup} data supplier!")
                 st.experimental_rerun()

@@ -902,7 +902,7 @@ elif menu_pilihan == "Permintaan Barang":
 
             p_satuan = st.selectbox(
                 "Satuan",
-                ["PCS", "DUS"]
+                ["PCS", BOX, PACK, "DUS"]
             )
 
             p_pramuniaga = st.text_input(

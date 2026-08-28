@@ -399,10 +399,15 @@ with st.sidebar:
     st.divider()
     st.markdown("Menu")
     menu_pilihan = st.radio(
-        "",
-        ["Home", "Input Retur", "List Retur", "Input Pembelian", "Data Supplier", "Laporan", "Pengaturan"],
-        index=0
-    )
+    "",
+    [
+        "Home","Input Retur","List Retur","Permintaan Barang",
+        "Input Pembelian",
+        "Data Supplier",
+        "Laporan",
+        "Pengaturan"
+    ],
+    index=0)
     st.divider()
     st.markdown("Admin Gudang")
     if st.button("Keluar Sistem", use_container_width=True):
@@ -855,7 +860,415 @@ elif menu_pilihan == "List Retur":
                     st.experimental_rerun()
     else:
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+# ==========================================
+# MENU: PERMINTAAN BARANG
+# ==========================================
+elif menu_pilihan == "Permintaan Barang":
 
+    st.markdown("Permintaan Barang")
+    st.markdown(
+        "<p class='small-muted' style='margin-top:-10px'>"
+        "Pencatatan permintaan barang dari pramuniaga."
+        "</p>",
+        unsafe_allow_html=True
+    )
+
+    # ------------------------------------------
+    # FORM INPUT PERMINTAAN
+    # ------------------------------------------
+    with st.form("form_permintaan_barang", clear_on_submit=True):
+
+        pc1, pc2 = st.columns(2)
+
+        with pc1:
+            p_kode = st.text_input(
+                "Kode Barang",
+                placeholder="Contoh: 8999999999999"
+            )
+
+            p_nama = st.text_input(
+                "Nama Barang",
+                placeholder="Contoh: Indomie Goreng"
+            )
+
+            p_jumlah = st.number_input(
+                "Jumlah",
+                min_value=1,
+                value=1,
+                step=1
+            )
+
+        with pc2:
+
+            p_satuan = st.selectbox(
+                "Satuan",
+                ["PCS", "DUS"]
+            )
+
+            p_pramuniaga = st.text_input(
+                "Nama Pramuniaga / Peminta",
+                placeholder="Masukkan nama pramuniaga"
+            )
+
+            p_tanggal = st.date_input(
+                "Tanggal Permintaan",
+                value=datetime.date.today()
+            )
+
+        p_keterangan = st.text_area(
+            "Keterangan",
+            placeholder="Contoh: Stok rak habis / permintaan tambahan..."
+        )
+
+        submit_permintaan = st.form_submit_button(
+            "Simpan Permintaan Barang",
+            type="primary",
+            use_container_width=True
+        )
+
+        if submit_permintaan:
+
+            if not p_kode:
+                st.warning("Kode barang tidak boleh kosong!")
+
+            elif not p_nama:
+                st.warning("Nama barang tidak boleh kosong!")
+
+            elif not p_pramuniaga:
+                st.warning("Nama pramuniaga tidak boleh kosong!")
+
+            else:
+
+                payload_permintaan = {
+                    "kode_barang": str(p_kode).strip(),
+                    "nama_barang": str(p_nama).strip(),
+                    "jumlah": int(p_jumlah),
+                    "satuan": str(p_satuan),
+                    "nama_pramuniaga": str(p_pramuniaga).strip(),
+                    "tanggal_permintaan": str(p_tanggal),
+                    "status": "Diajukan",
+                    "keterangan": str(p_keterangan).strip()
+                }
+
+                try:
+
+                    response = supabase.table(
+                        "permintaan_barang"
+                    ).insert(
+                        payload_permintaan
+                    ).execute()
+
+                    st.success(
+                        "Permintaan barang berhasil disimpan!"
+                    )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        f"Gagal menyimpan permintaan barang: {e}"
+                    )
+
+    st.divider()
+
+    # ------------------------------------------
+    # DAFTAR PERMINTAAN
+    # ------------------------------------------
+    st.markdown("### Daftar Permintaan Barang")
+
+    pc_filter1, pc_filter2 = st.columns(2)
+
+    with pc_filter1:
+        cari_permintaan = st.text_input(
+            "Cari Barang / Kode / Pramuniaga",
+            key="cari_permintaan"
+        )
+
+    with pc_filter2:
+        filter_status_permintaan = st.selectbox(
+            "Filter Status",
+            [
+                "SEMUA STATUS",
+                "Diajukan",
+                "Diproses",
+                "Terpenuhi",
+                "Ditolak"
+            ],
+            key="filter_status_permintaan"
+        )
+
+    try:
+
+        query_permintaan = supabase.table(
+            "permintaan_barang"
+        ).select("*").order(
+            "id",
+            desc=True
+        )
+
+        if filter_status_permintaan != "SEMUA STATUS":
+            query_permintaan = query_permintaan.eq(
+                "status",
+                filter_status_permintaan
+            )
+
+        response_permintaan = query_permintaan.execute()
+
+        if response_permintaan.data:
+
+            df_permintaan = pd.DataFrame(
+                response_permintaan.data
+            )
+
+            # --------------------------------------
+            # SEARCH
+            # --------------------------------------
+            if cari_permintaan:
+
+                keyword = cari_permintaan.lower()
+
+                mask = (
+                    df_permintaan["kode_barang"]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains(keyword, na=False)
+                    |
+                    df_permintaan["nama_barang"]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains(keyword, na=False)
+                    |
+                    df_permintaan["nama_pramuniaga"]
+                    .astype(str)
+                    .str.lower()
+                    .str.contains(keyword, na=False)
+                )
+
+                df_permintaan = df_permintaan[mask]
+
+            # --------------------------------------
+            # FORMAT TABEL
+            # --------------------------------------
+            if not df_permintaan.empty:
+
+                kolom_tampil = [
+                    "id",
+                    "kode_barang",
+                    "nama_barang",
+                    "jumlah",
+                    "satuan",
+                    "nama_pramuniaga",
+                    "tanggal_permintaan",
+                    "status",
+                    "keterangan"
+                ]
+
+                df_tampil = df_permintaan[
+                    [
+                        kolom
+                        for kolom in kolom_tampil
+                        if kolom in df_permintaan.columns
+                    ]
+                ].copy()
+
+                st.dataframe(
+                    df_tampil,
+                    column_config={
+                        "id": st.column_config.NumberColumn(
+                            "ID",
+                            width="small"
+                        ),
+
+                        "kode_barang": st.column_config.TextColumn(
+                            "Kode Barang",
+                            width="medium"
+                        ),
+
+                        "nama_barang": st.column_config.TextColumn(
+                            "Nama Barang",
+                            width="large"
+                        ),
+
+                        "jumlah": st.column_config.NumberColumn(
+                            "Jumlah",
+                            width="small"
+                        ),
+
+                        "satuan": st.column_config.TextColumn(
+                            "Satuan",
+                            width="small"
+                        ),
+
+                        "nama_pramuniaga": st.column_config.TextColumn(
+                            "Pramuniaga",
+                            width="medium"
+                        ),
+
+                        "tanggal_permintaan": st.column_config.DateColumn(
+                            "Tanggal",
+                            width="medium"
+                        ),
+
+                        "status": st.column_config.TextColumn(
+                            "Status",
+                            width="medium"
+                        ),
+
+                        "keterangan": st.column_config.TextColumn(
+                            "Keterangan",
+                            width="large"
+                        )
+                    },
+                    hide_index=True,
+                    use_container_width=True
+                )
+
+                st.markdown("### Kelola Permintaan")
+
+                # --------------------------------------
+                # PILIH DATA
+                # --------------------------------------
+                pilihan_permintaan = df_permintaan.apply(
+                    lambda row:
+                    f"ID: {row['id']} | "
+                    f"{row['nama_barang']} | "
+                    f"{row['jumlah']} {row['satuan']} | "
+                    f"{row['nama_pramuniaga']}",
+                    axis=1
+                ).tolist()
+
+                selected_permintaan = st.selectbox(
+                    "Pilih Permintaan",
+                    pilihan_permintaan,
+                    key="selected_permintaan"
+                )
+
+                if selected_permintaan:
+
+                    selected_id = int(
+                        selected_permintaan
+                        .split("|")[0]
+                        .replace("ID:", "")
+                        .strip()
+                    )
+
+                    data_perm = df_permintaan[
+                        df_permintaan["id"] == selected_id
+                    ].iloc[0]
+
+                    c_status, c_hapus = st.columns(2)
+
+                    # ----------------------------------
+                    # UPDATE STATUS
+                    # ----------------------------------
+                    with c_status:
+
+                        status_baru = st.selectbox(
+                            "Ubah Status",
+                            [
+                                "Diajukan",
+                                "Diproses",
+                                "Terpenuhi",
+                                "Ditolak"
+                            ],
+                            index=[
+                                "Diajukan",
+                                "Diproses",
+                                "Terpenuhi",
+                                "Ditolak"
+                            ].index(
+                                data_perm.get(
+                                    "status",
+                                    "Diajukan"
+                                )
+                            ),
+                            key="status_baru_permintaan"
+                        )
+
+                        if st.button(
+                            "Update Status",
+                            type="primary",
+                            use_container_width=True
+                        ):
+
+                            try:
+
+                                supabase.table(
+                                    "permintaan_barang"
+                                ).update({
+                                    "status": status_baru
+                                }).eq(
+                                    "id",
+                                    selected_id
+                                ).execute()
+
+                                st.success(
+                                    "Status berhasil diperbarui!"
+                                )
+
+                                st.rerun()
+
+                            except Exception as e:
+
+                                st.error(
+                                    f"Gagal memperbarui status: {e}"
+                                )
+
+                    # ----------------------------------
+                    # HAPUS
+                    # ----------------------------------
+                    with c_hapus:
+
+                        st.markdown(
+                            "<br>",
+                            unsafe_allow_html=True
+                        )
+
+                        if st.button(
+                            "Hapus Permintaan",
+                            type="secondary",
+                            use_container_width=True
+                        ):
+
+                            try:
+
+                                supabase.table(
+                                    "permintaan_barang"
+                                ).delete().eq(
+                                    "id",
+                                    selected_id
+                                ).execute()
+
+                                st.success(
+                                    "Permintaan berhasil dihapus!"
+                                )
+
+                                st.rerun()
+
+                            except Exception as e:
+
+                                st.error(
+                                    f"Gagal menghapus data: {e}"
+                                )
+
+            else:
+
+                st.info(
+                    "Tidak ada permintaan yang sesuai."
+                )
+
+        else:
+
+            st.info(
+                "Belum ada permintaan barang."
+            )
+
+    except Exception as e:
+
+        st.error(
+            f"Gagal mengambil data permintaan barang: {e}"
+        )
 # ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================

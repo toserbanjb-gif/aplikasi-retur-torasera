@@ -622,29 +622,48 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
             df["status"].astype(str).str.lower().str.contains(kw, na=False)
         ]
     return df
-    
-# ==========================================
-# CEK DATA RETUR DUPLIKAT
-# ==========================================
-def cek_retur_sudah_ada(kode, nama):
-    try:
-        kode = str(kode).strip()
-        nama = str(nama).strip()
 
-        if not kode or not nama:
+# ==========================================
+# CEK DUPLIKAT DATA RETUR
+# ==========================================
+def cek_retur_sudah_ada(kode, nama, exclude_id=None):
+    """
+    Cek apakah kombinasi kode barang + nama barang sudah ada.
+    Perbandingan kode dan nama dibuat aman terhadap spasi dan huruf besar/kecil.
+    exclude_id dipakai saat EDIT agar baris yang sedang diedit tidak dianggap duplikat.
+    """
+    try:
+        kode_cari = str(kode or "").strip()
+        nama_cari = " ".join(str(nama or "").strip().lower().split())
+
+        if not kode_cari or not nama_cari:
             return None
 
         response = (
             supabase
             .table("barang_retur")
             .select("*")
-            .eq("kode", kode)
-            .eq("nama", nama)
+            .eq("kode", kode_cari)
             .execute()
         )
 
-        if response.data:
-            return response.data[0]
+        if not response.data:
+            return None
+
+        for data in response.data:
+            if exclude_id is not None:
+                try:
+                    if int(data.get("id")) == int(exclude_id):
+                        continue
+                except Exception:
+                    pass
+
+            nama_db = " ".join(
+                str(data.get("nama", "") or "").strip().lower().split()
+            )
+
+            if nama_db == nama_cari:
+                return data
 
         return None
 
@@ -656,25 +675,50 @@ def cek_retur_sudah_ada(kode, nama):
 # ==========================================
 # POPUP DATA RETUR SUDAH ADA
 # ==========================================
-@st.dialog("⚠️ Data Retur Sudah Ada")
-def dialog_retur_sudah_ada(data_lama):
-    st.error("Maaf, data barang tersebut sudah ada di database.")
+@st.dialog("Data Retur Sudah Ada")
+def dialog_retur_sudah_ada(data_lama, qty_input=None):
+    st.error("Maaf, data barang ini sudah ada di database.")
 
-    st.write("**Kode Barang:**", data_lama.get("kode", "-"))
-    st.write("**Nama Barang:**", data_lama.get("nama", "-"))
-    st.write("**Qty Tersimpan:**", data_lama.get("qty", 0), "PCS")
+    kode_lama = data_lama.get("kode", "-")
+    nama_lama = data_lama.get("nama", "-")
+    qty_lama = data_lama.get("qty", 0)
+    hpp_lama = data_lama.get("hpp", 0)
 
+    c1, c2 = st.columns(2)
+
+    with c1:
+        st.write("**Kode Barang**")
+        st.info(str(kode_lama))
+
+        st.write("**Nama Barang**")
+        st.info(str(nama_lama))
+
+    with c2:
+        st.write("**Qty Tersimpan**")
+        st.warning(f"{qty_lama} PCS")
+
+        if qty_input is not None:
+            st.write("**Qty yang Anda Input**")
+            st.warning(f"{qty_input} PCS")
+
+        st.write("**HPP Tersimpan**")
+        try:
+            st.info(format_rp(float(hpp_lama or 0)))
+        except Exception:
+            st.info(str(hpp_lama))
+
+    st.divider()
     st.warning(
-        "Data tidak disimpan agar retur barang yang sama tidak menjadi dobel."
+        "Data BARU tidak disimpan agar Qty retur tidak menjadi dobel. "
+        "Jika Qty perlu ditambah atau dikoreksi, silakan edit data yang sudah ada di menu List Retur."
     )
+
+    st.markdown("**Pastikan Qty sesuai barang fisik/nota retur sebelum menyimpan perubahan.**")
 
     if st.button("Tutup", type="primary", use_container_width=True):
         st.rerun()
 
 
-# ==========================================
-# POPUP JATUH TEMPO SUPPLIER
-# ==========================================
 @st.dialog("Peringatan Jatuh Tempo Supplier")
 def dialog_notifikasi_jatuh_tempo():
     st.markdown("Daftar Peringatan Jatuh Tempo")
@@ -747,57 +791,134 @@ if menu_pilihan == "Home":
 # ==========================================
 elif menu_pilihan == "Input Retur":
     st.markdown("Input Barang Retur")
-    st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan barang retur baru ke database sistem.</p>", unsafe_allow_html=True)
-    
+    st.markdown(
+        "<p class='small-muted' style='margin-top:-10px'>"
+        "Masukkan barang retur baru. Sistem akan mengecek Kode + Nama agar data tidak dobel.</p>",
+        unsafe_allow_html=True
+    )
+
     with st.form("form_input_retur", clear_on_submit=True):
         fc1, fc2, fc3 = st.columns(3)
+
         with fc1:
-            f_kode = st.text_input("Kode Barcode / SKU")
-            f_nama = st.text_input("Nama Barang")
-            f_qty = st.number_input("Quantity (Qty)", min_value=1, value=1)
+            f_kode = st.text_input(
+                "Kode Barcode / SKU",
+                placeholder="Masukkan kode barang"
+            )
+            f_nama = st.text_input(
+                "Nama Barang",
+                placeholder="Masukkan nama barang"
+            )
+            f_qty = st.number_input(
+                "Quantity (Qty)",
+                min_value=1,
+                value=1,
+                step=1,
+                format="%d"
+            )
+
         with fc2:
-            f_hpp = st.number_input("Harga HPP (Rp)", min_value=0.0, value=0.0, step=100.0)
-            f_ket = st.selectbox("Keterangan Retur", ["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"])
-            f_ed = st.text_input("Tanggal ED (jika ada, misal: 31-12-2026 atau -)")
+            f_hpp = st.number_input(
+                "Harga HPP (Rp)",
+                min_value=0.0,
+                value=0.0,
+                step=100.0
+            )
+            f_ket = st.selectbox(
+                "Keterangan Retur",
+                ["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"]
+            )
+            f_ed = st.text_input(
+                "Tanggal ED (jika ada, misal: 31-12-2026 atau -)"
+            )
+
         with fc3:
             f_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER)
-            f_status = st.selectbox("Status Retur", ["Pengajuan", "Sedang Diproses", "Sukses"])
-            f_tgl = st.date_input("Tanggal Input", value=datetime.date.today())
-        
-        submit_retur = st.form_submit_button("Simpan Data Retur", type="primary")
-        if submit_retur:
-            if not f_nama:
-                st.warning("Nama barang tidak boleh kosong!")
-            else:
-                try:
-                    total_val = float(f_qty) * float(f_hpp)
+            f_status = st.selectbox(
+                "Status Retur",
+                ["Pengajuan", "Sedang Diproses", "Sukses"]
+            )
+            f_tgl = st.date_input(
+                "Tanggal Input",
+                value=datetime.date.today()
+            )
+
+        submit_retur = st.form_submit_button(
+            "Simpan Data Retur",
+            type="primary",
+            use_container_width=True
+        )
+
+    if submit_retur:
+        kode_input = str(f_kode or "").strip()
+        nama_input = str(f_nama or "").strip()
+        qty_input = int(f_qty)
+
+        if not kode_input:
+            st.warning("Kode barang tidak boleh kosong!")
+        elif not nama_input:
+            st.warning("Nama barang tidak boleh kosong!")
+        elif qty_input <= 0:
+            st.warning("Qty harus lebih dari 0!")
+        elif float(f_hpp) < 0:
+            st.warning("HPP tidak boleh minus!")
+        else:
+            try:
+                # CEK DUPLIKAT SEBELUM INSERT
+                data_lama = cek_retur_sudah_ada(
+                    kode_input,
+                    nama_input
+                )
+
+                if data_lama is not None:
+                    dialog_retur_sudah_ada(
+                        data_lama,
+                        qty_input=qty_input
+                    )
+                else:
+                    total_val = qty_input * float(f_hpp)
+
                     payload_retur = {
-                        "kode": str(f_kode),
-                        "nama": str(f_nama),
-                        "qty": int(f_qty),
+                        "kode": kode_input,
+                        "nama": nama_input,
+                        "qty": qty_input,
                         "hpp": float(f_hpp),
                         "total": float(total_val),
                         "ket": str(f_ket),
-                        "ed": str(f_ed),
+                        "ed": str(f_ed or "").strip(),
                         "supplier": str(f_supplier),
                         "status": str(f_status),
                         "tgl_input": str(f_tgl)
                     }
-                    success, resp = insert_with_optional_columns("barang_retur", payload_retur)
+
+                    success, resp = insert_with_optional_columns(
+                        "barang_retur",
+                        payload_retur
+                    )
+
                     if success:
-                        st.success("Data barang retur berhasil disimpan!")
-                        st.experimental_rerun()
+                        st.success(
+                            f"Data barang retur berhasil disimpan! Qty: {qty_input} PCS"
+                        )
+                        st.rerun()
                     else:
-                        st.success(str(resp))
-                        st.experimental_rerun()
-                except Exception as e:
-                    st.error(f"Gagal menyimpan data retur: {e}")
+                        # Helper lama dapat menyimpan data walaupun ada kolom opsional
+                        # yang tidak tersedia. Tampilkan pesannya dan refresh.
+                        st.warning(str(resp))
+                        st.rerun()
+
+            except Exception as e:
+                st.error(f"Gagal menyimpan data retur: {e}")
 
     st.divider()
     st.markdown("Riwayat Retur Terbaru")
     df_history = ambil_data_retur()
     if not df_history.empty:
-        st.dataframe(df_history.tail(10).reset_index(drop=True), use_container_width=True, hide_index=True)
+        st.dataframe(
+            df_history.tail(10).reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True
+        )
     else:
         st.info("Belum ada data retur.")
 
@@ -868,9 +989,33 @@ elif menu_pilihan == "List Retur":
                         new_hpp = float(row["hpp"])
                         new_total = new_qty * new_hpp
                         
+                        kode_edit = str(row["kode"] or "").strip()
+                        nama_edit = str(row["nama"] or "").strip()
+
+                        if not kode_edit or not nama_edit:
+                            st.warning(f"ID {row['id']}: Kode dan nama barang wajib diisi.")
+                            continue
+
+                        if new_qty <= 0:
+                            st.warning(f"ID {row['id']}: Qty harus lebih dari 0.")
+                            continue
+
+                        duplikat_edit = cek_retur_sudah_ada(
+                            kode_edit,
+                            nama_edit,
+                            exclude_id=int(row["id"])
+                        )
+
+                        if duplikat_edit is not None:
+                            st.error(
+                                f"ID {row['id']}: Kode + Nama barang sudah ada pada ID {duplikat_edit.get('id')}. "
+                                "Perubahan tidak disimpan agar data tidak dobel."
+                            )
+                            continue
+
                         if (
-                            str(row["kode"]) != str(orig.get("kode", "")) or
-                            str(row["nama"]) != str(orig.get("nama", "")) or
+                            kode_edit != str(orig.get("kode", "")).strip() or
+                            nama_edit != str(orig.get("nama", "")).strip() or
                             new_qty != float(orig.get("qty", 0) or 0) or
                             new_hpp != float(orig.get("hpp", 0) or 0) or
                             str(row["ket"]) != str(orig.get("ket", "")) or
@@ -880,8 +1025,8 @@ elif menu_pilihan == "List Retur":
                         ):
                             try:
                                 supabase.table("barang_retur").update({
-                                    "kode": str(row["kode"]),
-                                    "nama": str(row["nama"]),
+                                    "kode": kode_edit,
+                                    "nama": nama_edit,
                                     "qty": int(new_qty),
                                     "hpp": float(new_hpp),
                                     "total": float(new_total),

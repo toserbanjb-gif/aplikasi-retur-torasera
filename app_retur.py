@@ -622,7 +622,59 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
             df["status"].astype(str).str.lower().str.contains(kw, na=False)
         ]
     return df
+    
+# ==========================================
+# CEK DATA RETUR DUPLIKAT
+# ==========================================
+def cek_retur_sudah_ada(kode, nama):
+    try:
+        kode = str(kode).strip()
+        nama = str(nama).strip()
 
+        if not kode or not nama:
+            return None
+
+        response = (
+            supabase
+            .table("barang_retur")
+            .select("*")
+            .eq("kode", kode)
+            .eq("nama", nama)
+            .execute()
+        )
+
+        if response.data:
+            return response.data[0]
+
+        return None
+
+    except Exception as e:
+        st.error(f"Gagal mengecek data retur: {e}")
+        return None
+
+
+# ==========================================
+# POPUP DATA RETUR SUDAH ADA
+# ==========================================
+@st.dialog("⚠️ Data Retur Sudah Ada")
+def dialog_retur_sudah_ada(data_lama):
+    st.error("Maaf, data barang tersebut sudah ada di database.")
+
+    st.write("**Kode Barang:**", data_lama.get("kode", "-"))
+    st.write("**Nama Barang:**", data_lama.get("nama", "-"))
+    st.write("**Qty Tersimpan:**", data_lama.get("qty", 0), "PCS")
+
+    st.warning(
+        "Data tidak disimpan agar retur barang yang sama tidak menjadi dobel."
+    )
+
+    if st.button("Tutup", type="primary", use_container_width=True):
+        st.rerun()
+
+
+# ==========================================
+# POPUP JATUH TEMPO SUPPLIER
+# ==========================================
 @st.dialog("Peringatan Jatuh Tempo Supplier")
 def dialog_notifikasi_jatuh_tempo():
     st.markdown("Daftar Peringatan Jatuh Tempo")

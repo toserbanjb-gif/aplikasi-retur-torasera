@@ -475,6 +475,7 @@ DAFTAR_SUPPLIER = [
     "UD PILAR MAKMUR",
     "PT WIRA SADANA LESTARI (Yono)",
     "PT SAI (Yuli)",
+    "Atribut Rezeki",
     "Nova (Ari)",
     "PT SNACK RIzky (Tris)",
     "UD ARJO JAYA (Aldi)",

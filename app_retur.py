@@ -8,7 +8,7 @@ import plotly.express as px
 from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import mm
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from supabase import Client, create_client
 import reportlab.lib.pagesizes
 
@@ -342,7 +342,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
+    elements.append(Paragraph("TORASERA", style_title))
     elements.append(Paragraph(f"Laporan Data Supplier ({html.escape(str(jenis_filter))}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
@@ -407,7 +407,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TOSERBA NURJA BERKAH", style_title))
+    elements.append(Paragraph("TORASERA", style_title))
     elements.append(Paragraph(f"Laporan Barang Retur — {html.escape(str(judul_laporan))}<br/>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
@@ -462,6 +462,25 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     ]))
 
     elements.append(t)
+
+    # --- KOLOM TANDA TANGAN ---
+    style_ttd = ParagraphStyle('TTD', parent=styles['Normal'], fontSize=10, alignment=1, textColor=colors.HexColor('#0F172A'))
+    style_ttd_bold = ParagraphStyle('TTDBold', parent=style_ttd, fontName='Helvetica-Bold')
+    ttd_table = Table(
+        [
+            [Paragraph("TTD Gudang", style_ttd_bold), Paragraph("Dibawa oleh", style_ttd_bold)],
+            ["", ""],
+            [Paragraph("(................................)", style_ttd), Paragraph("(................................)", style_ttd)],
+        ],
+        colWidths=[90*mm, 90*mm],
+        rowHeights=[7*mm, 25*mm, 7*mm],
+    )
+    ttd_table.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+    ]))
+    elements.append(Spacer(1, 12*mm))
+    elements.append(KeepTogether([ttd_table]))
     doc.build(elements)
     buffer.seek(0)
     return buffer.getvalue()

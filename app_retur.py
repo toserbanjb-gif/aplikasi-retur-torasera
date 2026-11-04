@@ -1071,15 +1071,40 @@ elif menu_pilihan == "List Retur":
     with fl_c3:
         cari_retur_input = st.text_input("Cari Data Retur (Kode / Nama / Keterangan)")
 
+    # --- FILTER TANGGAL (DARI - SAMPAI) berdasarkan Tanggal Input ---
+    ft_c1, ft_c2, ft_c3 = st.columns(3)
+    with ft_c1:
+        pakai_filter_tgl = st.checkbox("Aktifkan filter tanggal (Tanggal Input)", value=False, key="retur_pakai_tgl")
+    with ft_c2:
+        tgl_dari = st.date_input("Dari Tanggal", value=datetime.date.today().replace(day=1), key="retur_tgl_dari", disabled=not pakai_filter_tgl)
+    with ft_c3:
+        tgl_sampai = st.date_input("Sampai Tanggal", value=datetime.date.today(), key="retur_tgl_sampai", disabled=not pakai_filter_tgl)
+
     df_retur_view = ambil_data_retur(filter_supplier=pilih_sup_filter, filter_status=pilih_status_filter, cari=cari_retur_input)
+
+    judul_pdf = pilih_sup_filter
+    suffix_file = ""
+    if pakai_filter_tgl:
+        if tgl_dari > tgl_sampai:
+            st.warning("Tanggal 'Dari' lebih besar dari 'Sampai'. Kedua tanggal ditukar otomatis.")
+            tgl_dari, tgl_sampai = tgl_sampai, tgl_dari
+        if not df_retur_view.empty and "tgl_input" in df_retur_view.columns:
+            tgl_series = pd.to_datetime(df_retur_view["tgl_input"], errors="coerce").dt.date
+            mask_tgl = tgl_series.apply(
+                lambda d: isinstance(d, datetime.date) and tgl_dari <= d <= tgl_sampai
+            )
+            df_retur_view = df_retur_view[mask_tgl]
+        judul_pdf = f"{pilih_sup_filter} | {tgl_dari.strftime('%d-%m-%Y')} s/d {tgl_sampai.strftime('%d-%m-%Y')}"
+        suffix_file = f"_{tgl_dari}_sd_{tgl_sampai}"
+        st.caption(f"Menampilkan data dengan Tanggal Input {tgl_dari.strftime('%d-%m-%Y')} s/d {tgl_sampai.strftime('%d-%m-%Y')} — {len(df_retur_view)} data.")
 
     if not df_retur_view.empty:
         safe_name = pilih_sup_filter.replace(" ", "_").replace("/", "_")
-        pdf_bytes = generate_pdf_retur_custom(df_retur_view, pilih_sup_filter)
+        pdf_bytes = generate_pdf_retur_custom(df_retur_view, judul_pdf)
         st.download_button(
             label=f"Download Laporan PDF ({pilih_sup_filter})",
             data=pdf_bytes,
-            file_name=f"Laporan_Retur_{safe_name}_{datetime.date.today()}.pdf",
+            file_name=f"Laporan_Retur_{safe_name}{suffix_file}_{datetime.date.today()}.pdf",
             mime="application/pdf",
             use_container_width=True
         )

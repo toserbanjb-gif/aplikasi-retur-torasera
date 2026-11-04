@@ -32,6 +32,78 @@ st.markdown(
     .small-muted { color:#94A3B8; font-size:12px; }
     .card-title { font-size:13px; font-weight:600; margin-bottom:6px; }
     [data-testid="stSidebar"] .css-1d391kg { padding-top: 8px; }
+
+    /* ===== MODERN GRADIENT BUTTONS ===== */
+    .stButton > button,
+    .stDownloadButton > button,
+    [data-testid="stFormSubmitButton"] > button {
+        border: none !important;
+        border-radius: 10px !important;
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+        letter-spacing: 0.2px;
+        background-size: 200% 200% !important;
+        background-position: 0% 50% !important;
+        box-shadow: 0 4px 14px rgba(99, 102, 241, 0.30) !important;
+        transition: all 0.3s ease !important;
+    }
+    .stButton > button p,
+    .stDownloadButton > button p,
+    [data-testid="stFormSubmitButton"] > button p {
+        color: #FFFFFF !important;
+    }
+
+    /* PRIMARY: Indigo -> Violet -> Pink */
+    .stButton > button[kind="primary"],
+    button[data-testid="stBaseButton-primary"],
+    button[data-testid="stBaseButton-primaryFormSubmit"],
+    [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
+        background-image: linear-gradient(135deg, #6366F1 0%, #8B5CF6 50%, #EC4899 100%) !important;
+        box-shadow: 0 4px 14px rgba(139, 92, 246, 0.35) !important;
+    }
+
+    /* SECONDARY: Cyan -> Blue -> Indigo */
+    .stButton > button[kind="secondary"],
+    button[data-testid="stBaseButton-secondary"],
+    button[data-testid="stBaseButton-secondaryFormSubmit"],
+    [data-testid="stFormSubmitButton"] > button[kind="secondaryFormSubmit"] {
+        background-image: linear-gradient(135deg, #06B6D4 0%, #3B82F6 50%, #6366F1 100%) !important;
+        box-shadow: 0 4px 14px rgba(59, 130, 246, 0.30) !important;
+    }
+
+    /* DOWNLOAD: Emerald -> Teal -> Cyan */
+    .stDownloadButton > button {
+        background-image: linear-gradient(135deg, #10B981 0%, #14B8A6 50%, #06B6D4 100%) !important;
+        box-shadow: 0 4px 14px rgba(20, 184, 166, 0.30) !important;
+    }
+
+    /* HOVER */
+    .stButton > button:hover,
+    .stDownloadButton > button:hover,
+    [data-testid="stFormSubmitButton"] > button:hover {
+        background-position: 100% 50% !important;
+        transform: translateY(-2px);
+        filter: brightness(1.08);
+        box-shadow: 0 8px 22px rgba(99, 102, 241, 0.45) !important;
+        color: #FFFFFF !important;
+    }
+
+    /* ACTIVE (ditekan) */
+    .stButton > button:active,
+    .stDownloadButton > button:active,
+    [data-testid="stFormSubmitButton"] > button:active {
+        transform: translateY(0) scale(0.98);
+        filter: brightness(0.95);
+    }
+
+    /* DISABLED */
+    .stButton > button:disabled,
+    .stDownloadButton > button:disabled,
+    [data-testid="stFormSubmitButton"] > button:disabled {
+        opacity: 0.5 !important;
+        box-shadow: none !important;
+        transform: none;
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -392,7 +464,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 
 # --- SIDEBAR (TOGGLE MODE DI SIDEBAR) ---
 with st.sidebar:
-    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:#2563EB;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:linear-gradient(135deg,#6366F1,#EC4899);border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
     st.divider()
     theme_choice = st.radio("Pilih Mode", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
     st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
@@ -419,7 +491,7 @@ if st.session_state.theme == "Gelap":
     st.markdown('''
         <style>
         .stApp { background-color: #0B1220; color: #F8FAFC; }
-        .stButton>button { border-radius:8px; }
+        .stButton>button { border-radius:10px; }
         </style>
     ''', unsafe_allow_html=True)
     plotly_template = "plotly_dark"
@@ -427,7 +499,7 @@ else:
     st.markdown('''
         <style>
         .stApp { background-color: #F8FAFC; color: #0F172A; }
-        .stButton>button { border-radius:8px; }
+        .stButton>button { border-radius:10px; }
         </style>
     ''', unsafe_allow_html=True)
     plotly_template = "plotly"

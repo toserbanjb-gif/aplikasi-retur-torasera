@@ -1983,4 +1983,4 @@ elif menu_pilihan == "Pengaturan":
     mode_setting = st.selectbox("Pilih Tema Utama", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1)
     if st.button("Terapkan Tema", type="primary"):
         st.session_state.theme = "Terang" if "Terang" in mode_setting else "Gelap"
-        st.success("Tema berhasil diperbarui! Silakan refresh halaman jika diperlukan.")
+        st.success("Tema berhasil diperbarui! Silakan refresh halaman jika diperlukan.") 

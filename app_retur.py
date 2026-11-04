@@ -215,10 +215,10 @@ def ambil_data_supplier(cari=""):
             return pd.DataFrame(columns=cols)
         df = pd.DataFrame(response.data)
         df.columns = [str(c).lower() for c in df.columns]
-        
+
         if "id" not in df.columns:
             df["id"] = range(1, len(df) + 1)
-            
+
         df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
         if "no_urut" in df.columns:
             df["no_urut"] = pd.to_numeric(df["no_urut"], errors="coerce").fillna(1).astype(int)
@@ -234,12 +234,12 @@ def ambil_data_supplier(cari=""):
         else:
             df["jenis_pajak"] = "Non PKP"
         df["sistem_bayar"] = df["sistem_bayar"].astype(str) if "sistem_bayar" in df.columns else ""
-        
+
         if "jatuh_tempo" in df.columns:
             df["jatuh_tempo"] = pd.to_datetime(df["jatuh_tempo"], errors="coerce").dt.date
         else:
             df["jatuh_tempo"] = pd.Series([datetime.date.today() for _ in range(len(df))])
-            
+
         if cari:
             kw = cari.lower()
             df = df[
@@ -265,13 +265,13 @@ def ambil_data_pembelian(cari=""):
         df.columns = [str(c).lower() for c in df.columns]
         if "id" not in df.columns:
             df["id"] = range(1, len(df) + 1)
-        
+
         df["id"] = pd.to_numeric(df["id"], errors="coerce").fillna(0).astype(int)
         if "total_tagihan" in df.columns:
             df["total_tagihan"] = pd.to_numeric(df["total_tagihan"], errors="coerce").fillna(0.0).astype(float)
         else:
             df["total_tagihan"] = 0.0
-        
+
         if "tgl_datang" in df.columns:
             df["tgl_datang"] = pd.to_datetime(df["tgl_datang"], errors="coerce").dt.date
         if "jatuh_tempo" in df.columns:
@@ -335,7 +335,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=reportlab.lib.pagesizes.A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
     elements = []
-    
+
     styles = getSampleStyleSheet()
     style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'), alignment=1, spaceAfter=6)
     style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'), alignment=1, spaceAfter=15)
@@ -353,7 +353,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
         Paragraph("<b>Jenis</b>", style_cell_bold),
         Paragraph("<b>Sistem Bayar</b>", style_cell_bold),
         Paragraph("<b>Jatuh Tempo</b>", style_cell_bold)
-    ]] 
+    ]]
 
     total_tagihan_pdf = 0
     for idx, row in df_export.iterrows():
@@ -389,7 +389,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
         ('BACKGROUND', (0,-1), (-1,-1), colors.HexColor('#F1F5F9')),
         ('LINEABOVE', (0,-1), (-1,-1), 1, colors.HexColor('#0F172A')),
     ]))
-    
+
     elements.append(t)
     doc.build(elements)
     buffer.seek(0)
@@ -400,14 +400,14 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=reportlab.lib.pagesizes.A4, rightMargin=15*mm, leftMargin=15*mm, topMargin=15*mm, bottomMargin=15*mm)
     elements = []
-    
+
     styles = getSampleStyleSheet()
     style_title = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=16, textColor=colors.HexColor('#0F172A'), alignment=1, spaceAfter=4)
     style_subtitle = ParagraphStyle('SubTitleStyle', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#475569'), alignment=1, spaceAfter=15)
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TORASERA NURJA BERKAH", style_title))
+    elements.append(Paragraph("TORASERA", style_title))
     elements.append(Paragraph(f"Laporan Barang Retur — {html.escape(str(judul_laporan))}<br/>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
@@ -427,7 +427,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
         hpp_v = _num(row.get('hpp'))
         tot_v = _num(row.get('total')) or (qty_v * hpp_v)
         total_nilai_retur += tot_v
-        
+
         table_data.append([
             Paragraph(html.escape(str(row.get('kode', ''))), style_cell),
             Paragraph(html.escape(str(row.get('nama', ''))), style_cell),
@@ -708,16 +708,22 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
         query = query.eq("supplier", filter_supplier)
     if filter_status and filter_status != "SEMUA STATUS":
         query = query.eq("status", filter_status)
-    
+
     response = query.execute()
     if not response.data:
-        return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input"])
+        return pd.DataFrame(columns=["id", "kode", "nama", "qty", "hpp", "total", "ket", "ed", "supplier", "status", "tgl_input", "link_bukti_nota"])
 
     df = pd.DataFrame(response.data)
     df.columns = [str(c).lower() for c in df.columns]
 
     if "id" not in df.columns:
         df["id"] = range(1, len(df) + 1)
+
+    # kolom link foto bukti nota (jika belum ada di tabel, dibuat kosong di sisi aplikasi)
+    if "link_bukti_nota" not in df.columns:
+        df["link_bukti_nota"] = ""
+    else:
+        df["link_bukti_nota"] = df["link_bukti_nota"].fillna("").astype(str)
 
     # bersihkan kolom angka: kosong/NaN -> 0 (total kosong dihitung ulang dari qty x hpp)
     for kol in ("qty", "hpp", "total"):
@@ -866,11 +872,11 @@ st.divider()
 if menu_pilihan == "Home":
     st.markdown("Dashboard Ringkasan Sistem")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Selamat datang — ringkasan cepat sistem dan indikator utama.</p>", unsafe_allow_html=True)
-    
+
     df_ret_home = ambil_data_retur()
     df_sup_home = ambil_data_supplier()
     df_inv_home = ambil_data_pembelian()
-    
+
     # Metrics as cards
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -884,7 +890,7 @@ if menu_pilihan == "Home":
         st.markdown(f"<div class='metric-card'><div class='card-title'>Total Invoice Pembelian</div><div style='font-size:18px;font-weight:700'>{format_rp(total_inv_val)}</div><div class='small-muted'>Data transaksi masuk</div></div>", unsafe_allow_html=True)
 
     st.divider()
-    
+
     col_ch1, col_ch2 = st.columns(2)
     with col_ch1:
         st.markdown("Status Retur Barang")
@@ -894,7 +900,7 @@ if menu_pilihan == "Home":
             st.plotly_chart(fig_ret, use_container_width=True)
         else:
             st.info("Belum ada data retur untuk divisualisasikan.")
-            
+
     with col_ch2:
         st.markdown("Status Pelunasan Invoice")
         if not df_inv_home.empty:
@@ -1079,8 +1085,8 @@ elif menu_pilihan == "Input Retur":
 # ==========================================
 elif menu_pilihan == "List Retur":
     st.markdown("List Data Retur & Manajemen Edit")
-    st.markdown("<p class='small-muted' style='margin-top:-10px'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
-    
+    st.markdown("<p class='small-muted' style='margin-top:-10px'>Filter data retur berdasarkan supplier/status, edit langsung tabel, simpan perubahan, upload foto bukti nota, atau cetak laporan PDF per supplier.</p>", unsafe_allow_html=True)
+
     fl_c1, fl_c2, fl_c3 = st.columns(3)
     with fl_c1:
         opsi_supp_filter = ["SEMUA SUPPLIER"] + DAFTAR_SUPPLIER
@@ -1146,8 +1152,9 @@ elif menu_pilihan == "List Retur":
                 "supplier": st.column_config.SelectboxColumn("Supplier", options=DAFTAR_SUPPLIER, required=True, width="large"),
                 "status": st.column_config.SelectboxColumn("Status", options=["Pengajuan", "Sedang Diproses", "Sukses"], required=True, width="medium"),
                 "tgl_input": st.column_config.TextColumn("Tanggal Input", width="small", disabled=True),
+                "link_bukti_nota": st.column_config.LinkColumn("Bukti Nota", display_text="Lihat Nota", width="small", disabled=True),
             },
-            disabled=["id", "total", "tgl_input"],
+            disabled=["id", "total", "tgl_input", "link_bukti_nota"],
             hide_index=True,
             use_container_width=True,
             key="editor_tabel_retur_v2"
@@ -1168,7 +1175,7 @@ elif menu_pilihan == "List Retur":
                         new_qty = float(row["qty"])
                         new_hpp = float(row["hpp"])
                         new_total = new_qty * new_hpp
-                        
+
                         kode_edit = str(row["kode"] or "").strip()
                         nama_edit = str(row["nama"] or "").strip()
 
@@ -1235,8 +1242,104 @@ elif menu_pilihan == "List Retur":
                             continue
                     st.success("Data retur terpilih berhasil dihapus!")
                     st.rerun()
+
+        # ==========================================
+        # UPLOAD / EDIT FOTO BUKTI NOTA BARANG RETUR
+        # (ditampilkan di bawah tombol aksi)
+        # ==========================================
+        st.divider()
+        st.markdown("### Upload / Edit Foto Bukti Nota Barang Retur")
+        st.markdown("<p class='small-muted' style='margin-top:-6px'>Pilih barang retur, lalu upload atau ganti foto bukti nota (png / jpg / pdf).</p>", unsafe_allow_html=True)
+
+        flash_nota = st.session_state.pop("flash_nota_retur", None)
+        if flash_nota:
+            st.success(flash_nota)
+
+        jml_ada_nota = int((df_retur_view["link_bukti_nota"].astype(str).str.strip() != "").sum())
+        st.caption(f"Barang dengan bukti nota: {jml_ada_nota} dari {len(df_retur_view)} data.")
+
+        opsi_nota = df_retur_view.apply(
+            lambda r: f"ID {r['id']} | {r['kode']} | {r['nama']}", axis=1
+        ).tolist()
+        pilih_nota = st.selectbox("Pilih Barang Retur", opsi_nota, key="pilih_retur_nota")
+        id_nota = int(pilih_nota.split("|")[0].replace("ID", "").strip())
+        row_nota = df_retur_view[df_retur_view["id"] == id_nota].iloc[0]
+        link_nota_lama = str(row_nota.get("link_bukti_nota", "") or "").strip()
+
+        nota_c1, nota_c2 = st.columns(2)
+        with nota_c1:
+            st.markdown("**Bukti Nota Saat Ini**")
+            if link_nota_lama:
+                if link_nota_lama.lower().split("?")[0].endswith(".pdf"):
+                    st.markdown(f"[Lihat / Unduh Bukti Nota (PDF)]({link_nota_lama})")
+                else:
+                    try:
+                        st.image(link_nota_lama, width=300, caption=f"Bukti nota ID {id_nota}")
+                    except Exception:
+                        st.markdown(f"[Lihat / Unduh Bukti Nota]({link_nota_lama})")
+            else:
+                st.info("Belum ada foto bukti nota untuk barang ini.")
+        with nota_c2:
+            st.markdown("**Upload Foto Baru / Ganti**")
+            file_nota_retur = st.file_uploader(
+                "Pilih file bukti nota",
+                type=["png", "jpg", "jpeg", "pdf"],
+                key=f"up_nota_retur_{id_nota}"
+            )
+            if file_nota_retur is not None and not file_nota_retur.name.lower().endswith(".pdf"):
+                st.image(file_nota_retur, width=200, caption="Pratinjau file yang akan disimpan")
+
+        btn_n1, btn_n2 = st.columns(2)
+        pesan_kolom_nota = (
+            "Kolom `link_bukti_nota` belum ada di tabel `barang_retur`. "
+            "Jalankan perintah ini di Supabase (SQL Editor) lalu coba lagi:\n\n"
+            "`alter table barang_retur add column link_bukti_nota text;`"
+        )
+        with btn_n1:
+            if st.button("Simpan Foto Bukti Nota", type="primary", use_container_width=True, key="btn_simpan_nota_retur"):
+                if file_nota_retur is None:
+                    st.warning("Pilih file bukti nota terlebih dahulu.")
+                else:
+                    try:
+                        ext_nr = file_nota_retur.name.split(".")[-1].lower()
+                        ts_nr = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                        path_nr = f"retur/nota_retur_{id_nota}_{ts_nr}.{ext_nr}"
+                        supabase.storage.from_("bukti_pembelian").upload(
+                            path=path_nr,
+                            file=file_nota_retur.getvalue(),
+                            file_options={"content-type": file_nota_retur.type}
+                        )
+                        res_nr = supabase.storage.from_("bukti_pembelian").get_public_url(path_nr)
+                        url_nr = extract_public_url(res_nr)
+                        if not url_nr:
+                            st.error("File terupload, tetapi link publik tidak berhasil dibuat. Pastikan bucket 'bukti_pembelian' bersifat Public.")
+                        else:
+                            supabase.table("barang_retur").update(
+                                {"link_bukti_nota": url_nr}
+                            ).eq("id", id_nota).execute()
+                            st.session_state["flash_nota_retur"] = f"Foto bukti nota untuk ID {id_nota} berhasil disimpan!"
+                            st.rerun()
+                    except Exception as e:
+                        if "link_bukti_nota" in str(e):
+                            st.error(pesan_kolom_nota)
+                        else:
+                            st.error(f"Gagal menyimpan foto bukti nota: {e}")
+        with btn_n2:
+            if st.button("Hapus Foto Bukti Nota", type="secondary", use_container_width=True, key="btn_hapus_nota_retur", disabled=not link_nota_lama):
+                try:
+                    supabase.table("barang_retur").update(
+                        {"link_bukti_nota": ""}
+                    ).eq("id", id_nota).execute()
+                    st.session_state["flash_nota_retur"] = f"Foto bukti nota untuk ID {id_nota} dihapus."
+                    st.rerun()
+                except Exception as e:
+                    if "link_bukti_nota" in str(e):
+                        st.error(pesan_kolom_nota)
+                    else:
+                        st.error(f"Gagal menghapus foto bukti nota: {e}")
     else:
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
+
 # ==========================================
 # MENU: PERMINTAAN BARANG
 # ==========================================
@@ -1646,19 +1749,20 @@ elif menu_pilihan == "Permintaan Barang":
         st.error(
             f"Gagal mengambil data permintaan barang: {e}"
         )
+
 # ==========================================
 # MENU 3: INPUT PEMBELIAN / INVOICE
 # ==========================================
 elif menu_pilihan == "Input Pembelian":
     st.markdown("Pencatatan & Manajemen Invoice Supplier")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Formulir pencatatan faktur/invoice barang masuk lengkap dengan upload bukti nota, bukti pembayaran, dan faktur pajak.</p>", unsafe_allow_html=True)
-    
+
     # Ambil data terbaru (digunakan juga untuk mengetahui kolom yang tersedia secara implisit)
     df_inv_view = ambil_data_pembelian("")
-    
+
     # Buat Tabs untuk memisahkan Menu Tambah dan Edit/Hapus
     tab_tambah, tab_edit = st.tabs(["Tambah Pembelian Baru", "Edit / Hapus Pembelian"])
-    
+
     # ================= TAB 1: TAMBAH PEMBELIAN =================
     with tab_tambah:
         with st.form("form_input_pembelian", clear_on_submit=True):
@@ -1672,7 +1776,7 @@ elif menu_pilihan == "Input Pembelian":
                 i_tgl_datang = st.date_input("Tanggal Datang Barang", value=datetime.date.today())
                 i_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=datetime.date.today() + datetime.timedelta(days=30))
                 i_status_lunas = st.selectbox("Status Pelunasan", ["Belum Lunas", "Lunas", "Sebagian"], key="inv_stat_baru")
-                
+
             st.markdown("---")
             uc1, uc2, uc3 = st.columns([1,1,1])
             with uc1:
@@ -1681,7 +1785,7 @@ elif menu_pilihan == "Input Pembelian":
                 i_file_bayar = st.file_uploader("Upload Foto/File Bukti Pembayaran (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_bayar")
             with uc3:
                 i_file_faktur_pajak = st.file_uploader("Upload Foto/File Faktur Pajak (Opsional)", type=["png", "jpg", "jpeg", "pdf"], key="up_faktur_pajak")
-            
+
             submit_inv = st.form_submit_button("Simpan Data Pembelian", type="primary")
             if submit_inv:
                 if not i_invoice:
@@ -1760,7 +1864,7 @@ elif menu_pilihan == "Input Pembelian":
         else:
             pilihan_data = df_inv_view.apply(lambda row: f"ID: {row.get('id', '')} | Inv: {row.get('no_invoice', '')} | {row.get('nama_supplier','')}", axis=1).tolist()
             selected_str = st.selectbox("Pilih Data Pembelian yang ingin di-Edit/Hapus", pilihan_data)
-            
+
             if selected_str:
                 selected_id = int(selected_str.split("|")[0].replace("ID:", "").strip())
                 data_terpilih = df_inv_view[df_inv_view["id"] == selected_id].iloc[0]
@@ -1770,7 +1874,7 @@ elif menu_pilihan == "Input Pembelian":
                 current_link_bayar = data_terpilih.get("link_bayar", "") if "link_bayar" in data_terpilih else ""
                 current_link_faktur_pajak = data_terpilih.get("link_faktur_pajak", "") if "link_faktur_pajak" in data_terpilih else ""
                 current_jenis_pajak = data_terpilih.get("jenis_pajak", "Non PKP") if "jenis_pajak" in data_terpilih else "Non PKP"
-                
+
                 with st.form("form_edit_pembelian"):
                     ec1, ec2 = st.columns(2)
                     with ec1:
@@ -1785,17 +1889,17 @@ elif menu_pilihan == "Input Pembelian":
                         except Exception:
                             parsed_tgl_datang = datetime.date.today()
                         e_tgl_datang = st.date_input("Tanggal Datang Barang", value=parsed_tgl_datang)
-                        
+
                         try:
                             parsed_jatuh_tempo = datetime.datetime.strptime(str(data_terpilih.get("jatuh_tempo", "")), "%Y-%m-%d").date() if pd.notna(data_terpilih.get("jatuh_tempo", "")) else datetime.date.today()
                         except Exception:
                             parsed_jatuh_tempo = datetime.date.today()
                         e_jatuh_tempo = st.date_input("Tanggal Jatuh Tempo", value=parsed_jatuh_tempo)
-                        
+
                         stat_list = ["Belum Lunas", "Lunas", "Sebagian"]
                         stat_idx = stat_list.index(data_terpilih.get("status_lunas")) if data_terpilih.get("status_lunas") in stat_list else 0
                         e_status_lunas = st.selectbox("Status Pelunasan", stat_list, index=stat_idx, key="edit_stat")
-                    
+
                     # show current files (preview for images, link for PDFs)
                     st.markdown("Bukti Saat Ini")
                     c1, c2, c3 = st.columns(3)
@@ -1848,7 +1952,7 @@ elif menu_pilihan == "Input Pembelian":
                         submit_update = st.form_submit_button("Update / Simpan Perubahan", type="primary", use_container_width=True)
                     with btn_col2:
                         submit_delete = st.form_submit_button("Hapus Data Ini", type="secondary", use_container_width=True)
-                        
+
                     if submit_update:
                         try:
                             public_url_nota = current_link_nota or ""
@@ -1912,7 +2016,7 @@ elif menu_pilihan == "Input Pembelian":
                                 st.rerun()
                         except Exception as e:
                             st.error(f"Gagal mengupdate data: {e}")
-                            
+
                     if submit_delete:
                         try:
                             supabase.table("data_pembelian").delete().eq("id", selected_id).execute()
@@ -1923,7 +2027,7 @@ elif menu_pilihan == "Input Pembelian":
 
     st.divider()
     st.markdown("Daftar Invoice & Pembelian Masuk")
-    
+
     # --- FILTER PENCARIAN & TABEL VIEW ---
     fc_inv1, fc_inv2, fc_inv3 = st.columns(3)
     with fc_inv1:
@@ -1941,14 +2045,14 @@ elif menu_pilihan == "Input Pembelian":
     if not df_inv_filtered.empty and filter_tgl_tipe != "Tanpa Filter Tanggal" and isinstance(rentang_tgl, tuple) and len(rentang_tgl) == 2:
         tgl_mulai, tgl_selesai = rentang_tgl
         kolom_target_tgl = "tgl_datang" if filter_tgl_tipe == "Tanggal Datang" else "jatuh_tempo"
-        
+
         if kolom_target_tgl in df_inv_filtered.columns:
             df_inv_filtered[kolom_target_tgl] = pd.to_datetime(df_inv_filtered[kolom_target_tgl], errors="coerce").dt.date
             df_inv_filtered = df_inv_filtered[
-                (df_inv_filtered[kolom_target_tgl] >= tgl_mulai) & 
+                (df_inv_filtered[kolom_target_tgl] >= tgl_mulai) &
                 (df_inv_filtered[kolom_target_tgl] <= tgl_selesai)
             ]
-    
+
     if not df_inv_filtered.empty:
         st.dataframe(
             df_inv_filtered,
@@ -1968,7 +2072,7 @@ elif menu_pilihan == "Input Pembelian":
             hide_index=True,
             use_container_width=True
         )
-        
+
         grand_total_nilai = df_inv_filtered["total_tagihan"].sum() if "total_tagihan" in df_inv_filtered.columns else 0
         col_gt1, col_gt2 = st.columns([2, 1])
         with col_gt2:
@@ -1982,10 +2086,10 @@ elif menu_pilihan == "Input Pembelian":
 elif menu_pilihan == "Data Supplier":
     st.markdown("Manajemen Data Supplier & Tagihan")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Pengelolaan informasi profil supplier, status pajak, sistem pembayaran, dan monitoring tagihan.</p>", unsafe_allow_html=True)
-    
+
     cari_sup = st.text_input("Cari Supplier (Nama / Jenis Pajak / Sistem Bayar)")
     df_sup_view = ambil_data_supplier(cari_sup)
-    
+
     if not df_sup_view.empty:
         pdf_sup_bytes = generate_pdf_supplier(df_sup_view, "Semua Supplier Aktif")
         st.download_button(
@@ -2012,7 +2116,7 @@ elif menu_pilihan == "Data Supplier":
             use_container_width=True,
             key="editor_tabel_supplier"
         )
-        
+
         if st.button("Simpan Perubahan Supplier", type="primary"):
             count_upd_sup = 0
             for _, row in edited_df_sup.iterrows():
@@ -2048,12 +2152,12 @@ elif menu_pilihan == "Data Supplier":
 elif menu_pilihan == "Laporan":
     st.markdown("Pusat Laporan & Analisis Data")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Analisis visual mendalam terkait performa retur, akumulasi tagihan supplier, dan tren pembelian.</p>", unsafe_allow_html=True)
-    
+
     df_lap_retur = ambil_data_retur()
     df_lap_sup = ambil_data_supplier()
-    
+
     tab_l1, tab_l2 = st.tabs(["Analisis Retur", "Analisis Tagihan Supplier"])
-    
+
     with tab_l1:
         st.markdown("Top Supplier Berdasarkan Nilai Retur")
         if not df_lap_retur.empty and "total" in df_lap_retur.columns:
@@ -2063,7 +2167,7 @@ elif menu_pilihan == "Laporan":
             st.plotly_chart(fig_bar_ret, use_container_width=True)
         else:
             st.info("Data retur belum mencukupi.")
-            
+
     with tab_l2:
         st.markdown("Top Supplier Berdasarkan Tagihan Terbesar")
         if not df_lap_sup.empty and "tagihan" in df_lap_sup.columns:
@@ -2080,12 +2184,12 @@ elif menu_pilihan == "Laporan":
 elif menu_pilihan == "Pengaturan":
     st.markdown("Pengaturan Sistem")
     st.markdown("<p class='small-muted' style='margin-top:-10px'>Konfigurasi akun, informasi toko, dan preferensi aplikasi.</p>", unsafe_allow_html=True)
-    
+
     st.markdown("Profil Toko")
     st.text_input("Nama Toko", value="Toserba Nurja Berkah", disabled=True)
     st.text_input("Lokasi / Alamat", value="Probolinggo, Jawa Timur", disabled=True)
     st.text_input("Sistem Versi", value="v2.5.0 Production", disabled=True)
-    
+
     st.divider()
     st.markdown("Preferensi Tampilan")
     mode_setting = st.selectbox("Pilih Tema Utama", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1)

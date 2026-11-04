@@ -11,7 +11,296 @@ from reportlab.lib.units import mm
 from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 from supabase import Client, create_client
 import reportlab.lib.pagesizes
+# ui_theme.py
+# Modul TAMPILAN saja. Tidak ada akses Supabase / data / logika bisnis di sini.
+from urllib.parse import quote
 
+import plotly.express as px
+import streamlit as st
+
+# ------------------------------------------------------------------
+# Palet warna
+# ------------------------------------------------------------------
+LIGHT = {
+    "bg": "#F4F7F7",
+    "surface": "#FFFFFF",
+    "surface2": "#EDF2F2",
+    "border": "#DDE5E6",
+    "text": "#12212B",
+    "text2": "#3C4F5A",
+    "muted": "#667B86",
+    "accent": "#0F766E",
+    "accent2": "#14B8A6",
+    "accent_soft": "rgba(15,118,110,.10)",
+    "btn_text": "#FFFFFF",
+    "btn_hover": "#115E59",
+    "sidebar": "#0E2428",
+    "shadow": "0 1px 2px rgba(16,24,40,.05), 0 4px 14px rgba(16,24,40,.04)",
+}
+DARK = {
+    "bg": "#0A1416",
+    "surface": "#112125",
+    "surface2": "#172B30",
+    "border": "#223940",
+    "text": "#E7F0F1",
+    "text2": "#BBCDD1",
+    "muted": "#86A0A7",
+    "accent": "#2DD4BF",
+    "accent2": "#5EEAD4",
+    "accent_soft": "rgba(45,212,191,.12)",
+    "btn_text": "#042F2E",
+    "btn_hover": "#5EEAD4",
+    "sidebar": "#071013",
+    "shadow": "0 1px 2px rgba(0,0,0,.3), 0 6px 18px rgba(0,0,0,.25)",
+}
+
+# ------------------------------------------------------------------
+# Ikon menu sidebar (gaya garis, dipakai sebagai CSS mask)
+# Urutan harus sama dengan urutan menu di app.py
+# ------------------------------------------------------------------
+_SVG = (
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' "
+    "stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'>{}</svg>"
+)
+_NAV_ICONS = [
+    # Home
+    "<path d='m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z'/><polyline points='9 22 9 12 15 12 15 22'/>",
+    # Input Retur
+    "<path d='M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8'/><path d='M3 3v5h5'/>",
+    # List Retur
+    "<line x1='8' y1='6' x2='21' y2='6'/><line x1='8' y1='12' x2='21' y2='12'/><line x1='8' y1='18' x2='21' y2='18'/>"
+    "<line x1='3' y1='6' x2='3.01' y2='6'/><line x1='3' y1='12' x2='3.01' y2='12'/><line x1='3' y1='18' x2='3.01' y2='18'/>",
+    # Permintaan Barang
+    "<path d='m7.5 4.27 9 5.15'/><path d='M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z'/>"
+    "<path d='m3.3 7 8.7 5 8.7-5'/><path d='M12 22V12'/>",
+    # Input Pembelian
+    "<circle cx='8' cy='21' r='1'/><circle cx='19' cy='21' r='1'/>"
+    "<path d='M2.05 2.05h2l2.66 12.42a2 2 0 0 0 2 1.58h9.78a2 2 0 0 0 1.95-1.57l1.65-7.43H5.12'/>",
+    # Data Supplier
+    "<path d='M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2'/><path d='M15 18H9'/>"
+    "<path d='M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.48-4.35A1 1 0 0 0 17.52 8H14'/>"
+    "<circle cx='17' cy='18' r='2'/><circle cx='7' cy='18' r='2'/>",
+    # Laporan
+    "<line x1='12' y1='20' x2='12' y2='10'/><line x1='18' y1='20' x2='18' y2='4'/><line x1='6' y1='20' x2='6' y2='16'/>",
+    # Pengaturan
+    "<line x1='4' y1='21' x2='4' y2='14'/><line x1='4' y1='10' x2='4' y2='3'/><line x1='12' y1='21' x2='12' y2='12'/>"
+    "<line x1='12' y1='8' x2='12' y2='3'/><line x1='20' y1='21' x2='20' y2='16'/><line x1='20' y1='12' x2='20' y2='3'/>"
+    "<line x1='2' y1='14' x2='6' y2='14'/><line x1='10' y1='8' x2='14' y2='8'/><line x1='18' y1='16' x2='22' y2='16'/>",
+]
+
+
+def _nav_icon_css() -> str:
+    n = len(_NAV_ICONS)
+    base = f'[data-testid="stSidebar"] div[role="radiogroup"] > label:first-child:nth-last-child({n})'
+    out = [
+        f'{base}::before, {base} ~ label::before {{content:"";width:18px;height:18px;flex:none;'
+        "background:currentColor;-webkit-mask-size:contain;mask-size:contain;"
+        "-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;"
+        "-webkit-mask-position:center;mask-position:center;}"
+    ]
+    for k, body in enumerate(_NAV_ICONS, start=1):
+        uri = "data:image/svg+xml," + quote(_SVG.format(body), safe="")
+        sel = f"{base}::before" if k == 1 else f"{base} ~ label:nth-child({k})::before"
+        out.append(f'{sel}{{-webkit-mask-image:url("{uri}");mask-image:url("{uri}");}}')
+    return "\n".join(out)
+
+
+# ------------------------------------------------------------------
+# CSS statis (memakai variabel warna dari :root)
+# ------------------------------------------------------------------
+_STATIC_CSS = r"""
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+html, body, .stApp, .stApp p, .stApp label, .stApp li, .stApp button, .stApp input, .stApp textarea,
+.stApp h1, .stApp h2, .stApp h3, .stApp h4, [data-testid="stMarkdownContainer"] {
+  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+}
+.stApp { background: var(--bg); color: var(--text); }
+[data-testid="stHeader"] { background: transparent; }
+[data-testid="stMainBlockContainer"], .block-container { padding-top: 2.2rem; max-width: 1280px; }
+.stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: var(--text); letter-spacing: -.015em; }
+.stApp [data-testid="stMarkdownContainer"] p { color: var(--text2); }
+.stApp [data-testid="stWidgetLabel"] p, .stApp label p { color: var(--text2); font-weight: 600; font-size: 13px; }
+hr { border-color: var(--border) !important; opacity: 1; }
+
+/* ---------- Header halaman ---------- */
+.app-header { display:flex; align-items:center; gap:12px; }
+.app-title { font-size: 26px !important; font-weight: 800 !important; letter-spacing: -.025em; margin: 0; padding: 0; color: var(--text); line-height: 1.15; }
+.app-sub { margin: 4px 0 0 0; color: var(--muted); font-size: 13.5px; }
+.section-title { font-size: 18px; font-weight: 700; letter-spacing: -.01em; color: var(--text); margin: 6px 0 4px 0; display:flex; align-items:center; gap:10px; }
+.section-title::before { content:""; width:4px; height:18px; border-radius:2px; background: var(--accent); }
+
+/* ---------- Kartu metrik ---------- */
+.metric-card { position: relative; overflow: hidden; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 16px 18px 15px 20px; box-shadow: var(--shadow); }
+.metric-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:4px; background: var(--accent); }
+.metric-card .card-title, .card-title { font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 8px; }
+.metric-card div[style*="font-size:18px"] { font-size: 25px !important; font-weight: 800 !important; letter-spacing: -.025em;
+  color: var(--text); font-variant-numeric: tabular-nums; }
+.small-muted { color: var(--muted) !important; font-size: 12.5px !important; }
+
+/* ---------- Sidebar (gelap) ---------- */
+[data-testid="stSidebar"] { background: var(--sidebar); border-right: 1px solid rgba(255,255,255,.06); }
+[data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span,
+[data-testid="stSidebar"] li { color: #CFE0E3; }
+[data-testid="stSidebar"] .small-muted { color: #7F9AA1 !important; }
+[data-testid="stSidebar"] hr { border-color: rgba(255,255,255,.08) !important; }
+[data-testid="stSidebar"] div[style*="background:#2563EB"] {
+  background: linear-gradient(135deg, #14B8A6, #0F766E) !important; border-radius: 12px !important;
+  box-shadow: 0 4px 14px rgba(20,184,166,.35); letter-spacing: .02em; }
+[data-testid="stSidebar"] div[style*="color:#94A3B8"] { color: #7F9AA1 !important; }
+[data-testid="stSidebar"] div[role="radiogroup"] { gap: 2px; }
+[data-testid="stSidebar"] div[role="radiogroup"] > label {
+  display:flex; align-items:center; gap:11px; width:100%; padding: 10px 12px; margin: 0;
+  border-radius: 10px; cursor: pointer; transition: background .15s ease, color .15s ease; }
+[data-testid="stSidebar"] div[role="radiogroup"] > label > div:nth-of-type(1) { display: none; }
+[data-testid="stSidebar"] div[role="radiogroup"] > label p { margin: 0; font-size: 14px; font-weight: 500; color: inherit; }
+[data-testid="stSidebar"] div[role="radiogroup"] > label:hover { background: rgba(255,255,255,.06); }
+[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+  background: rgba(45,212,191,.14); color: #5EEAD4; box-shadow: inset 3px 0 0 #2DD4BF; }
+[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p { color: #5EEAD4; font-weight: 700; }
+/* pilihan Terang/Gelap jadi segmented control */
+[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) {
+  flex-direction: row; gap: 4px; padding: 4px; background: rgba(255,255,255,.06); border-radius: 12px; }
+[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label {
+  flex: 1; justify-content: center; padding: 7px 8px; }
+[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:has(input:checked) {
+  background: rgba(45,212,191,.2); box-shadow: none; }
+
+/* ---------- Tombol ---------- */
+.stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {
+  border-radius: 10px; font-weight: 600; padding: .55rem 1rem; border: 1px solid var(--border);
+  background: var(--surface); color: var(--text); transition: all .15s ease; box-shadow: 0 1px 2px rgba(16,24,40,.05); }
+.stButton > button:hover, .stDownloadButton > button:hover, [data-testid="stFormSubmitButton"] > button:hover {
+  border-color: var(--accent); color: var(--accent); transform: translateY(-1px); }
+.stButton > button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"],
+.stDownloadButton > button[kind="primary"], [data-testid="stFormSubmitButton"] > button[kind="primary"],
+[data-testid="stFormSubmitButton"] > button[data-testid="stBaseButton-primary"] {
+  background: var(--accent); color: var(--btn_text); border-color: var(--accent); box-shadow: 0 4px 12px rgba(15,118,110,.25); }
+.stButton > button[kind="primary"]:hover, .stButton > button[data-testid="stBaseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] > button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] > button[data-testid="stBaseButton-primary"]:hover {
+  background: var(--btn_hover); color: var(--btn_text); border-color: var(--btn_hover); }
+.stButton > button p, .stDownloadButton > button p, [data-testid="stFormSubmitButton"] > button p { color: inherit; font-weight: 600; }
+[data-testid="stSidebar"] .stButton > button { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); color: #E3EEF0; box-shadow: none; }
+[data-testid="stSidebar"] .stButton > button:hover { background: rgba(45,212,191,.16); border-color: #2DD4BF; color: #5EEAD4; }
+
+/* ---------- Input ---------- */
+[data-baseweb="input"], [data-baseweb="select"] > div, [data-baseweb="textarea"] {
+  background: var(--surface) !important; border-color: var(--border) !important; border-radius: 10px !important; }
+[data-baseweb="base-input"] { background: transparent !important; }
+[data-baseweb="input"] input, [data-baseweb="textarea"] textarea, [data-baseweb="select"] div { color: var(--text) !important; }
+[data-baseweb="input"]:focus-within, [data-baseweb="select"] > div:focus-within, [data-baseweb="textarea"]:focus-within {
+  border-color: var(--accent) !important; box-shadow: 0 0 0 3px var(--accent_soft) !important; }
+[data-baseweb="popover"] ul, [data-baseweb="menu"] { background: var(--surface) !important; }
+[data-baseweb="popover"] li { color: var(--text) !important; }
+[data-baseweb="popover"] li:hover { background: var(--accent_soft) !important; }
+[data-testid="stFileUploaderDropzone"] { background: var(--surface); border: 1.5px dashed var(--border); border-radius: 12px; }
+[data-testid="stFileUploaderDropzone"]:hover { border-color: var(--accent); }
+[data-testid="stForm"] { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; box-shadow: var(--shadow); }
+
+/* ---------- Tab, tabel, notifikasi, dialog ---------- */
+[data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid var(--border); }
+[data-baseweb="tab"] { border-radius: 8px 8px 0 0; padding: 10px 16px; }
+[data-baseweb="tab"] p { font-weight: 600; color: var(--muted); }
+[data-baseweb="tab"][aria-selected="true"] p { color: var(--accent); }
+[data-baseweb="tab-highlight"] { background: var(--accent) !important; height: 3px !important; border-radius: 3px; }
+[data-testid="stDataFrame"], [data-testid="stDataEditor"] { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); }
+[data-testid="stAlert"] { border-radius: 12px; border: 1px solid var(--border); }
+div[role="dialog"] { border-radius: 18px !important; background: var(--surface) !important; border: 1px solid var(--border); }
+[data-testid="stExpander"] { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.js-plotly-plot .main-svg { background: transparent !important; }
+.js-plotly-plot .plot-container .bg { fill: transparent !important; }
+
+/* ---------- Loading: bar progres di atas halaman ---------- */
+[data-testid="stStatusWidget"] { display: none !important; }
+.stApp[data-teststate="running"]::after {
+  content:""; position: fixed; top: 0; left: 0; height: 3px; width: 38%; z-index: 999999; border-radius: 0 3px 3px 0;
+  background: linear-gradient(90deg, transparent, var(--accent2), var(--accent), transparent);
+  animation: tn-run 1.05s cubic-bezier(.4,0,.2,1) infinite; }
+@keyframes tn-run { 0% { transform: translateX(-100%); } 100% { transform: translateX(300%); } }
+
+/* ---------- Loading: spinner st.spinner ---------- */
+[data-testid="stSpinner"] { display:flex; align-items:center; gap:12px; padding: 12px 16px; background: var(--surface);
+  border: 1px solid var(--border); border-radius: 12px; width: fit-content; box-shadow: var(--shadow); }
+[data-testid="stSpinner"] svg, [data-testid="stSpinner"] i { display: none !important; }
+[data-testid="stSpinner"]::before { content:""; flex:none; width:18px; height:18px; border-radius:50%;
+  border: 2.5px solid var(--accent_soft); border-top-color: var(--accent); border-right-color: var(--accent2);
+  animation: tn-spin .75s linear infinite; }
+[data-testid="stSpinner"] p, [data-testid="stSpinner"] div { color: var(--text2); font-weight: 600; margin: 0; }
+@keyframes tn-spin { to { transform: rotate(360deg); } }
+
+/* ---------- Loading: layar pembuka ---------- */
+.tn-splash { position: fixed; inset: 0; z-index: 9999999; display: grid; place-items: center; background: var(--bg);
+  animation: tn-splash-out .55s ease 1.5s forwards; }
+.tn-splash-inner { display:flex; flex-direction:column; align-items:center; gap: 14px; text-align:center; }
+.tn-ring { position: relative; width: 88px; height: 88px; display: grid; place-items: center; }
+.tn-ring::before { content:""; position:absolute; inset:0; border-radius:50%; border: 3px solid var(--accent_soft);
+  border-top-color: var(--accent); border-right-color: var(--accent2); animation: tn-spin 1s linear infinite; }
+.tn-logo { width: 58px; height: 58px; border-radius: 16px; display:grid; place-items:center; color:#fff; font-weight: 800; font-size: 20px;
+  letter-spacing: .03em; background: linear-gradient(135deg, #14B8A6, #0F766E); box-shadow: 0 8px 22px rgba(20,184,166,.35); }
+.tn-splash-title { font-size: 20px; font-weight: 800; letter-spacing: -.02em; color: var(--text); }
+.tn-splash-sub { font-size: 13px; color: var(--muted); }
+.tn-bar { width: 180px; height: 4px; border-radius: 4px; background: var(--accent_soft); overflow: hidden; }
+.tn-bar span { display:block; height:100%; width: 40%; border-radius: 4px; background: linear-gradient(90deg, var(--accent2), var(--accent));
+  animation: tn-bar 1.1s ease-in-out infinite; }
+@keyframes tn-bar { 0% { transform: translateX(-110%); } 100% { transform: translateX(280%); } }
+@keyframes tn-splash-out { to { opacity: 0; visibility: hidden; pointer-events: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  .tn-splash { animation-duration: .01ms; animation-delay: .4s; }
+  .tn-ring::before, .tn-bar span, [data-testid="stSpinner"]::before { animation-duration: 2.4s; }
+}
+@media (max-width: 640px) {
+  .app-title { font-size: 20px !important; }
+  [data-testid="stMainBlockContainer"], .block-container { padding-left: 1rem; padding-right: 1rem; }
+}
+"""
+
+
+def _compact(css: str) -> str:
+    # Hapus baris kosong & indentasi agar markdown Streamlit tidak memecah blok <style>
+    lines = [ln.strip() for ln in css.splitlines()]
+    return "\n".join(ln for ln in lines if ln)
+
+
+# ------------------------------------------------------------------
+# API publik
+# ------------------------------------------------------------------
+def inject_theme(theme: str = "Terang") -> str:
+    """Pasang seluruh CSS. Mengembalikan nama template plotly yang cocok."""
+    pal = DARK if theme == "Gelap" else LIGHT
+    root = ":root{" + "".join(f"--{k}:{v};" for k, v in pal.items()) + "}"
+    css = root + "\n" + _STATIC_CSS + "\n" + _nav_icon_css()
+    st.markdown(f"<style>\n{_compact(css)}\n</style>", unsafe_allow_html=True)
+
+    # Palet grafik Plotly (hanya warna, tidak mengubah data)
+    px.defaults.color_discrete_sequence = [
+        "#0F766E", "#F59E0B", "#4F46E5", "#E11D48", "#0EA5E9", "#84CC16", "#64748B",
+    ]
+    return "plotly_dark" if theme == "Gelap" else "plotly"
+
+
+def show_splash() -> None:
+    """Layar pembuka modern. Hanya tampil sekali per sesi."""
+    if st.session_state.get("_tn_splash_done"):
+        return
+    st.session_state["_tn_splash_done"] = True
+    st.markdown(
+        "<div class='tn-splash'><div class='tn-splash-inner'>"
+        "<div class='tn-ring'><div class='tn-logo'>TN</div></div>"
+        "<div class='tn-splash-title'>Toserba Nurja Berkah</div>"
+        "<div class='tn-splash-sub'>Menyiapkan data retur dan supplier</div>"
+        "<div class='tn-bar'><span></span></div>"
+        "</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def section_title(text: str) -> None:
+    """Judul bagian bergaya baru (opsional, pengganti st.markdown("Judul"))."""
+    import html as _html
+
+    st.markdown(f"<div class='section-title'>{_html.escape(text)}</div>", unsafe_allow_html=True)
 # --- CONFIG PAGE ---
 st.set_page_config(
     page_title="Sistem Manajemen Retur - Toserba Nurja Berkah",

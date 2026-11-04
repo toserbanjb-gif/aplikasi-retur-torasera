@@ -115,6 +115,15 @@ def format_rp(val):
     except Exception:
         return "Rp 0"
 
+def _num(val, default=0.0):
+    """Ubah ke float dengan aman. None / NaN / teks kosong / teks aneh -> default."""
+    try:
+        if val is None or pd.isna(val):
+            return float(default)
+        return float(val)
+    except Exception:
+        return float(default)
+
 # safe extraction of public url from Supabase storage responses
 def extract_public_url(res):
     try:
@@ -348,7 +357,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
 
     total_tagihan_pdf = 0
     for idx, row in df_export.iterrows():
-        tagihan_val = float(row.get('tagihan', 0) or 0)
+        tagihan_val = _num(row.get('tagihan'))
         total_tagihan_pdf += tagihan_val
         table_data.append([
             Paragraph(str(row.get('no_urut', idx+1)), style_cell),
@@ -414,9 +423,9 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 
     total_nilai_retur = 0
     for idx, row in df_export.iterrows():
-        qty_v = float(row.get('qty', 0) or 0)
-        hpp_v = float(row.get('hpp', 0) or 0)
-        tot_v = float(row.get('total', qty_v * hpp_v) or (qty_v * hpp_v))
+        qty_v = _num(row.get('qty'))
+        hpp_v = _num(row.get('hpp'))
+        tot_v = _num(row.get('total')) or (qty_v * hpp_v)
         total_nilai_retur += tot_v
         
         table_data.append([
@@ -690,6 +699,17 @@ def ambil_data_retur(filter_supplier="SEMUA SUPPLIER", filter_status="SEMUA STAT
 
     if "id" not in df.columns:
         df["id"] = range(1, len(df) + 1)
+
+    # bersihkan kolom angka: kosong/NaN -> 0 (total kosong dihitung ulang dari qty x hpp)
+    for kol in ("qty", "hpp", "total"):
+        if kol in df.columns:
+            df[kol] = pd.to_numeric(df[kol], errors="coerce")
+    if "qty" in df.columns:
+        df["qty"] = df["qty"].fillna(0).astype(int)
+    if "hpp" in df.columns:
+        df["hpp"] = df["hpp"].fillna(0.0)
+    if "total" in df.columns:
+        df["total"] = df["total"].fillna(df["qty"] * df["hpp"] if "qty" in df.columns and "hpp" in df.columns else 0.0)
 
     if cari:
         kw = cari.lower()

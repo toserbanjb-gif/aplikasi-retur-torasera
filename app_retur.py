@@ -1089,10 +1089,13 @@ elif menu_pilihan == "List Retur":
             st.warning("Tanggal 'Dari' lebih besar dari 'Sampai'. Kedua tanggal ditukar otomatis.")
             tgl_dari, tgl_sampai = tgl_sampai, tgl_dari
         if not df_retur_view.empty and "tgl_input" in df_retur_view.columns:
-            tgl_series = pd.to_datetime(df_retur_view["tgl_input"], errors="coerce").dt.date
-            mask_tgl = tgl_series.apply(
-                lambda d: isinstance(d, datetime.date) and tgl_dari <= d <= tgl_sampai
-            )
+            tgl_series = pd.to_datetime(df_retur_view["tgl_input"], errors="coerce")
+            if getattr(tgl_series.dt, "tz", None) is not None:
+                tgl_series = tgl_series.dt.tz_localize(None)
+            batas_awal = pd.Timestamp(tgl_dari)
+            batas_akhir = pd.Timestamp(tgl_sampai) + pd.Timedelta(days=1)
+            # baris tanpa tanggal (NaT) otomatis False sehingga tidak ikut tampil
+            mask_tgl = (tgl_series >= batas_awal) & (tgl_series < batas_akhir)
             df_retur_view = df_retur_view[mask_tgl]
         judul_pdf = f"{pilih_sup_filter} | {tgl_dari.strftime('%d-%m-%Y')} s/d {tgl_sampai.strftime('%d-%m-%Y')}"
         suffix_file = f"_{tgl_dari}_sd_{tgl_sampai}"

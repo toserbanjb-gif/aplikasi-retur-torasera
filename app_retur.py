@@ -508,6 +508,7 @@ with st.sidebar:
     if st.button("Keluar Sistem", use_container_width=True):
         st.info("Sistem terkunci.")
     st.markdown("<div class='small-muted' style='margin-top:8px'>Tips: Gunakan fitur 'Download' untuk simpan laporan PDF.</div>", unsafe_allow_html=True)
+    st.markdown("<div class='small-muted' style='margin-top:14px'>Lisensi © 2026 By Ridwan Sumardi Developer</div>", unsafe_allow_html=True)
 
 # --- CSS DINAMIS BERDASARKAN TEMA ---
 if st.session_state.theme == "Gelap":
@@ -2397,3 +2398,14 @@ elif menu_pilihan == "Pengaturan":
     if st.button("Terapkan Tema", type="primary"):
         st.session_state.theme = "Terang" if "Terang" in mode_setting else "Gelap"
         st.success("Tema berhasil diperbarui! Silakan refresh halaman jika diperlukan.")
+
+# ==========================================
+# FOOTER LISENSI (tampil di semua menu)
+# ==========================================
+st.divider()
+st.markdown(
+    "<div style='text-align:center;font-size:12px;opacity:0.7;padding:6px 0 14px 0'>"
+    "Lisensi © 2026 By <b>Ridwan Sumardi Developer</b>"
+    "</div>",
+    unsafe_allow_html=True,
+)

@@ -342,7 +342,7 @@ def generate_pdf_supplier(df_export, jenis_filter):
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=9, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=9, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TORASERA NURJA BERKAH", style_title))
+    elements.append(Paragraph("TORASERA", style_title))
     elements.append(Paragraph(f"Laporan Data Supplier ({html.escape(str(jenis_filter))}) — Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
@@ -407,7 +407,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TORASERA NURJA BERKAH", style_title))
+    elements.append(Paragraph("TORASERA", style_title))
     elements.append(Paragraph(f"Laporan Barang Retur — {html.escape(str(judul_laporan))}<br/>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 
@@ -468,7 +468,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     style_ttd_bold = ParagraphStyle('TTDBold', parent=style_ttd, fontName='Helvetica-Bold')
     ttd_table = Table(
         [
-            [Paragraph("Gudang", style_ttd_bold), Paragraph("Dibawa oleh ", style_ttd_bold)],
+            [Paragraph("TTD Gudang", style_ttd_bold), Paragraph("Dibawa oleh", style_ttd_bold)],
             ["", ""],
             [Paragraph("(................................)", style_ttd), Paragraph("(................................)", style_ttd)],
         ],
@@ -846,7 +846,7 @@ def dialog_notifikasi_jatuh_tempo():
         for n in notif_jatuh_tempo:
             st.markdown(f"- {n}")
     if st.button("Tutup", use_container_width=True, type="primary"):
-        st.experimental_rerun()
+        st.rerun()
 
 # --- HEADER ---
 head_c1, head_c2 = st.columns([10, 1])
@@ -1220,7 +1220,7 @@ elif menu_pilihan == "List Retur":
                                 st.error(f"Gagal memperbarui ID {row['id']}: {e}")
                 if count_upd_retur > 0:
                     st.success(f"Berhasil memperbarui {count_upd_retur} data retur!")
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.info("Tidak ada perubahan data retur yang terdeteksi.")
         with col_r2:
@@ -1234,7 +1234,7 @@ elif menu_pilihan == "List Retur":
                         except (ValueError, TypeError, Exception):
                             continue
                     st.success("Data retur terpilih berhasil dihapus!")
-                    st.experimental_rerun()
+                    st.rerun()
     else:
         st.info("Tidak ada data retur yang ditemukan sesuai filter.")
 # ==========================================
@@ -1744,11 +1744,11 @@ elif menu_pilihan == "Input Pembelian":
                         success, resp = insert_with_optional_columns("data_pembelian", payload_inv)
                         if success:
                             st.success("Data pembelian berhasil disimpan!")
-                            st.experimental_rerun()
+                            st.rerun()
                         else:
                             # resp bisa berupa pesan peringatan kalau kolom dihapus saat insert
                             st.warning(str(resp))
-                            st.experimental_rerun()
+                            st.rerun()
                     except Exception as e:
                         st.error(f"Gagal menyimpan data pembelian: {e}")
 
@@ -1906,10 +1906,10 @@ elif menu_pilihan == "Input Pembelian":
                             success_upd, resp_upd = update_with_optional_columns("data_pembelian", payload_update, "id", selected_id)
                             if success_upd:
                                 st.success("Data pembelian berhasil diperbarui!")
-                                st.experimental_rerun()
+                                st.rerun()
                             else:
                                 st.warning(str(resp_upd))
-                                st.experimental_rerun()
+                                st.rerun()
                         except Exception as e:
                             st.error(f"Gagal mengupdate data: {e}")
                             
@@ -1917,7 +1917,7 @@ elif menu_pilihan == "Input Pembelian":
                         try:
                             supabase.table("data_pembelian").delete().eq("id", selected_id).execute()
                             st.success("Data pembelian berhasil dihapus!")
-                            st.experimental_rerun()
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Gagal menghapus data: {e}")
 
@@ -2036,7 +2036,7 @@ elif menu_pilihan == "Data Supplier":
                         st.error(f"Gagal memperbarui supplier ID {row['id']}: {e}")
             if count_upd_sup > 0:
                 st.success(f"Berhasil memperbarui {count_upd_sup} data supplier!")
-                st.experimental_rerun()
+                st.rerun()
             else:
                 st.info("Tidak ada perubahan data supplier.")
     else:

@@ -172,7 +172,7 @@ def insert_with_optional_columns(table_name: str, payload: dict):
                         return False, f"Gagal menyimpan data (setelah menghapus '{col}'): {e2}"
             except Exception:
                 pass
-        return False, f"Gagal menyimpan data pembelian: {msg}"
+        return False, f"{msg}"
 
 def update_with_optional_columns(table_name: str, payload: dict, where_field: str, where_value):
     try:
@@ -876,24 +876,38 @@ elif menu_pilihan == "Input Retur":
         unsafe_allow_html=True
     )
 
-    with st.form("form_input_retur", clear_on_submit=True):
+    # versi form: dinaikkan setelah sukses agar isian dikosongkan HANYA kalau berhasil
+    ver = st.session_state.get("retur_form_ver", 0)
+
+    # pesan hasil simpan sebelumnya (tetap tampil setelah rerun)
+    flash = st.session_state.pop("flash_retur", None)
+    if flash:
+        if flash[0] == "success":
+            st.success(flash[1])
+        else:
+            st.warning(flash[1])
+
+    with st.form("form_input_retur", clear_on_submit=False):
         fc1, fc2, fc3 = st.columns(3)
 
         with fc1:
             f_kode = st.text_input(
                 "Kode Barcode / SKU",
-                placeholder="Masukkan kode barang"
+                placeholder="Masukkan kode barang",
+                key=f"f_kode_{ver}"
             )
             f_nama = st.text_input(
                 "Nama Barang",
-                placeholder="Masukkan nama barang"
+                placeholder="Masukkan nama barang",
+                key=f"f_nama_{ver}"
             )
             f_qty = st.number_input(
                 "Quantity (Qty)",
                 min_value=1,
                 value=1,
                 step=1,
-                format="%d"
+                format="%d",
+                key=f"f_qty_{ver}"
             )
 
         with fc2:
@@ -901,25 +915,30 @@ elif menu_pilihan == "Input Retur":
                 "Harga HPP (Rp)",
                 min_value=0.0,
                 value=0.0,
-                step=100.0
+                step=100.0,
+                key=f"f_hpp_{ver}"
             )
             f_ket = st.selectbox(
                 "Keterangan Retur",
-                ["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"]
+                ["ED", "Rusak", "Salah PO", "Lebih Bayar", "Lainnya"],
+                key=f"f_ket_{ver}"
             )
             f_ed = st.text_input(
-                "Tanggal ED (jika ada, misal: 31-12-2026 atau -)"
+                "Tanggal ED (jika ada, misal: 31-12-2026 atau -)",
+                key=f"f_ed_{ver}"
             )
 
         with fc3:
-            f_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER)
+            f_supplier = st.selectbox("Supplier", DAFTAR_SUPPLIER, key=f"f_sup_{ver}")
             f_status = st.selectbox(
                 "Status Retur",
-                ["Pengajuan", "Sedang Diproses", "Sukses"]
+                ["Pengajuan", "Sedang Diproses", "Sukses"],
+                key=f"f_status_{ver}"
             )
             f_tgl = st.date_input(
                 "Tanggal Input",
-                value=datetime.date.today()
+                value=datetime.date.today(),
+                key=f"f_tgl_{ver}"
             )
 
         submit_retur = st.form_submit_button(
@@ -976,15 +995,30 @@ elif menu_pilihan == "Input Retur":
                     )
 
                     if success:
-                        st.success(
-                            f"Data barang retur berhasil disimpan! Qty: {qty_input} PCS"
-                        )
+                        rows = getattr(resp, "data", None)
+                        if rows:
+                            # benar-benar tersimpan: kosongkan form & tampilkan pesan
+                            st.session_state["flash_retur"] = (
+                                "success",
+                                f"Data barang retur berhasil disimpan ke database! "
+                                f"Kode: {kode_input} | Qty: {qty_input} PCS"
+                            )
+                            st.session_state["retur_form_ver"] = ver + 1
+                            st.rerun()
+                        else:
+                            st.error(
+                                "Supabase tidak mengembalikan data baris yang disimpan. "
+                                "Kemungkinan insert ditolak oleh Row Level Security (RLS) "
+                                "pada tabel barang_retur, atau SUPABASE_KEY tidak punya izin insert."
+                            )
+                    elif str(resp).startswith("Kolom '"):
+                        # tersimpan, tapi ada kolom opsional yang tidak ada di tabel
+                        st.session_state["flash_retur"] = ("warning", str(resp))
+                        st.session_state["retur_form_ver"] = ver + 1
                         st.rerun()
                     else:
-                        # Helper lama dapat menyimpan data walaupun ada kolom opsional
-                        # yang tidak tersedia. Tampilkan pesannya dan refresh.
-                        st.warning(str(resp))
-                        st.rerun()
+                        # GAGAL: tampilkan error asli, isian TIDAK dikosongkan
+                        st.error(f"Data TIDAK tersimpan ke database. Penyebab: {resp}")
 
             except Exception as e:
                 st.error(f"Gagal menyimpan data retur: {e}")

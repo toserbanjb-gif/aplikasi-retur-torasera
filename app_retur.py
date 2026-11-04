@@ -407,7 +407,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     style_cell = ParagraphStyle('Cell', parent=styles['Normal'], fontSize=8, textColor=colors.HexColor('#1E293B'))
     style_cell_bold = ParagraphStyle('CellBold', parent=styles['Normal'], fontSize=8, fontName='Helvetica-Bold', textColor=colors.HexColor('#1E293B'))
 
-    elements.append(Paragraph("TORASERA", style_title))
+    elements.append(Paragraph("TORASERA NURJA BERKAH", style_title))
     elements.append(Paragraph(f"Laporan Barang Retur — {html.escape(str(judul_laporan))}<br/>Dicetak pada: {datetime.date.today().strftime('%d-%m-%Y')}", style_subtitle))
     elements.append(Spacer(1, 5*mm))
 

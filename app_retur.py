@@ -459,7 +459,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 
 # --- SIDEBAR (TOGGLE MODE DI SIDEBAR) ---
 with st.sidebar:
-    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:#36415A;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#3F5F25'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:#36415A;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#B7D894'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
     st.divider()
     theme_choice = st.radio("Pilih Mode", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
     st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
@@ -496,14 +496,14 @@ else:
     st.markdown('''
         <style>
         .stApp { background-color: #FFFFFF; color: #0F172A; }
-        [data-testid="stSidebar"] { background-color: #B7D894; }
+        [data-testid="stSidebar"] { background-color: #15370D; }
         [data-testid="stSidebar"] .stMarkdown,
         [data-testid="stSidebar"] label,
         [data-testid="stSidebar"] p,
-        [data-testid="stSidebar"] span { color: #1F3D0C; }
-        [data-testid="stSidebar"] .small-muted { color: #3F5F25 !important; }
-        [data-testid="stSidebar"] hr { border-color: rgba(31,61,12,0.25) !important; }
-        [data-testid="stSidebarCollapseButton"] svg { color: #1F3D0C; }
+        [data-testid="stSidebar"] span { color: #F1FAE6; }
+        [data-testid="stSidebar"] .small-muted { color: #B7D894 !important; }
+        [data-testid="stSidebar"] hr { border-color: rgba(183,216,148,0.35) !important; }
+        [data-testid="stSidebarCollapseButton"] svg { color: #F1FAE6; }
         [data-testid="stHeader"] { background: transparent; }
         .metric-card { background: #F8FAFC; border: 1px solid #E2E8F0; }
         </style>

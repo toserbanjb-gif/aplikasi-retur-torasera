@@ -33,65 +33,62 @@ st.markdown(
     .card-title { font-size:13px; font-weight:600; margin-bottom:6px; }
     [data-testid="stSidebar"] .css-1d391kg { padding-top: 8px; }
 
-    /* ===== TOMBOL HIJAU LEMBUT (B7D894 & E0F8C7) ===== */
+    /* ===== TOMBOL 36415A ===== */
     .stButton > button,
     .stDownloadButton > button,
     [data-testid="stFormSubmitButton"] > button {
-        border: 1px solid #9CC26B !important;
+        background: #36415A !important;
+        border: 1px solid #36415A !important;
         border-radius: 10px !important;
-        color: #1F3D0C !important;
+        color: #FFFFFF !important;
         font-weight: 600 !important;
         letter-spacing: 0.2px;
-        background-size: 200% 200% !important;
-        background-position: 0% 50% !important;
-        box-shadow: 0 4px 14px rgba(183, 216, 148, 0.45) !important;
-        transition: all 0.3s ease !important;
+        box-shadow: 0 4px 14px rgba(54, 65, 90, 0.25) !important;
+        transition: all 0.25s ease !important;
     }
     .stButton > button p,
     .stDownloadButton > button p,
     [data-testid="stFormSubmitButton"] > button p {
-        color: #1F3D0C !important;
+        color: #FFFFFF !important;
     }
 
-    /* PRIMARY: B7D894 -> E0F8C7 */
-    .stButton > button[kind="primary"],
-    button[data-testid="stBaseButton-primary"],
-    button[data-testid="stBaseButton-primaryFormSubmit"],
-    [data-testid="stFormSubmitButton"] > button[kind="primaryFormSubmit"] {
-        background-image: linear-gradient(135deg, #B7D894 0%, #E0F8C7 100%) !important;
-    }
-
-    /* SECONDARY: E0F8C7 -> B7D894 (kebalikan primary) */
+    /* SECONDARY: putih dengan garis & teks 36415A */
     .stButton > button[kind="secondary"],
     button[data-testid="stBaseButton-secondary"],
     button[data-testid="stBaseButton-secondaryFormSubmit"],
     [data-testid="stFormSubmitButton"] > button[kind="secondaryFormSubmit"] {
-        background-image: linear-gradient(135deg, #E0F8C7 0%, #B7D894 100%) !important;
+        background: #FFFFFF !important;
+        color: #36415A !important;
+        box-shadow: none !important;
     }
-
-    /* DOWNLOAD */
-    .stDownloadButton > button {
-        background-image: linear-gradient(135deg, #B7D894 0%, #E0F8C7 50%, #B7D894 100%) !important;
+    .stButton > button[kind="secondary"] p,
+    button[data-testid="stBaseButton-secondary"] p,
+    button[data-testid="stBaseButton-secondaryFormSubmit"] p {
+        color: #36415A !important;
     }
 
     /* HOVER */
     .stButton > button:hover,
     .stDownloadButton > button:hover,
     [data-testid="stFormSubmitButton"] > button:hover {
-        background-position: 100% 50% !important;
+        background: #4A5778 !important;
+        border-color: #4A5778 !important;
+        color: #FFFFFF !important;
         transform: translateY(-2px);
-        filter: brightness(1.03);
-        box-shadow: 0 8px 22px rgba(120, 160, 70, 0.40) !important;
-        color: #1F3D0C !important;
-        border-color: #7FA64A !important;
+        box-shadow: 0 8px 22px rgba(54, 65, 90, 0.35) !important;
+    }
+    .stButton > button:hover p,
+    .stDownloadButton > button:hover p,
+    [data-testid="stFormSubmitButton"] > button:hover p {
+        color: #FFFFFF !important;
     }
 
-    /* ACTIVE (ditekan) */
+    /* ACTIVE */
     .stButton > button:active,
     .stDownloadButton > button:active,
     [data-testid="stFormSubmitButton"] > button:active {
         transform: translateY(0) scale(0.98);
-        filter: brightness(0.96);
+        background: #2B344A !important;
     }
 
     /* DISABLED */
@@ -462,7 +459,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
 
 # --- SIDEBAR (TOGGLE MODE DI SIDEBAR) ---
 with st.sidebar:
-    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:linear-gradient(135deg,#B7D894,#E0F8C7);border-radius:8px;display:flex;align-items:center;justify-content:center;color:#1F3D0C;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
+    st.markdown("<div style='display:flex;align-items:center;gap:12px'><div style='width:44px;height:44px;background:#36415A;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#FFFFFF;font-weight:700'>TN</div><div><div style='font-weight:700'>Toserba Nurja Berkah</div><div style='font-size:12px;color:#94A3B8'>Manajemen Retur & Supplier</div></div></div>", unsafe_allow_html=True)
     st.divider()
     theme_choice = st.radio("Pilih Mode", ["Terang", "Gelap"], index=0 if st.session_state.theme == "Terang" else 1, label_visibility="collapsed")
     st.session_state.theme = "Terang" if "Terang" in theme_choice else "Gelap"
@@ -488,21 +485,20 @@ with st.sidebar:
 if st.session_state.theme == "Gelap":
     st.markdown('''
         <style>
-        .stApp { background-color: #0F1A0B; color: #F1FAE6; }
-        [data-testid="stSidebar"] { background-color: #16260F; }
+        .stApp { background-color: #0B1220; color: #F8FAFC; }
+        [data-testid="stSidebar"] { background-color: #111A2E; }
         [data-testid="stHeader"] { background: transparent; }
-        .stButton>button { border-radius:10px; }
+        .stButton>button, .stDownloadButton>button, [data-testid="stFormSubmitButton"]>button { border-color: #5B6A8C !important; }
         </style>
     ''', unsafe_allow_html=True)
     plotly_template = "plotly_dark"
 else:
     st.markdown('''
         <style>
-        .stApp { background-color: #EEF9E2; color: #1F3D0C; }
-        [data-testid="stSidebar"] { background-color: #E0F8C7; }
+        .stApp { background-color: #FFFFFF; color: #0F172A; }
+        [data-testid="stSidebar"] { background-color: #FFFFFF; border-right: 1px solid #E2E8F0; }
         [data-testid="stHeader"] { background: transparent; }
-        .metric-card { background: rgba(255,255,255,0.65); }
-        .stButton>button { border-radius:10px; }
+        .metric-card { background: #F8FAFC; border: 1px solid #E2E8F0; }
         </style>
     ''', unsafe_allow_html=True)
     plotly_template = "plotly"

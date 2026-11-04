@@ -468,7 +468,7 @@ def generate_pdf_retur_custom(df_export, judul_laporan):
     style_ttd_bold = ParagraphStyle('TTDBold', parent=style_ttd, fontName='Helvetica-Bold')
     ttd_table = Table(
         [
-            [Paragraph("TTD Gudang", style_ttd_bold), Paragraph("Dibawa oleh", style_ttd_bold)],
+            [Paragraph("Gudang", style_ttd_bold), Paragraph("Dibawa oleh ", style_ttd_bold)],
             ["", ""],
             [Paragraph("(................................)", style_ttd), Paragraph("(................................)", style_ttd)],
         ],

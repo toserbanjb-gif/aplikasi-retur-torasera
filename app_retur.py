@@ -854,10 +854,211 @@ def dialog_notifikasi_jatuh_tempo():
     if st.button("Tutup", use_container_width=True, type="primary"):
         st.rerun()
 
+# ==========================================
+# JAM & POPUP WAKTU SHOLAT (Probolinggo, WIB)
+# ==========================================
+WIB = datetime.timezone(datetime.timedelta(hours=7))
+
+# Jadwal cadangan (perkiraan) dipakai jika internet / API jadwal sholat tidak bisa diakses
+JADWAL_SHOLAT_CADANGAN = {
+    "Subuh": "04:05",
+    "Dzuhur": "11:40",
+    "Ashar": "15:00",
+    "Maghrib": "17:45",
+    "Isya": "18:55",
+}
+
+@st.cache_data(ttl=3 * 3600, show_spinner=False)
+def ambil_jadwal_sholat(tanggal_str: str):
+    """
+    Ambil jadwal sholat 5 waktu untuk Probolinggo (metode Kemenag RI) dari API Aladhan.
+    Kembalikan (dict_jadwal, dari_api_bool). Jika gagal, pakai jadwal cadangan.
+    """
+    try:
+        import requests
+        tgl = datetime.datetime.strptime(tanggal_str, "%Y-%m-%d").strftime("%d-%m-%Y")
+        r = requests.get(
+            f"https://api.aladhan.com/v1/timings/{tgl}",
+            params={
+                "latitude": -7.7543,
+                "longitude": 113.2159,
+                "method": 20,
+                "timezonestring": "Asia/Jakarta",
+            },
+            timeout=6,
+        )
+        r.raise_for_status()
+        t = r.json()["data"]["timings"]
+        jadwal = {
+            "Subuh": str(t["Fajr"])[:5],
+            "Dzuhur": str(t["Dhuhr"])[:5],
+            "Ashar": str(t["Asr"])[:5],
+            "Maghrib": str(t["Maghrib"])[:5],
+            "Isya": str(t["Isha"])[:5],
+        }
+        return jadwal, True
+    except Exception:
+        return dict(JADWAL_SHOLAT_CADANGAN), False
+
+KODE_JAM_SHOLAT = """
+<div style="font-family:'Inter',system-ui,sans-serif;border-radius:10px;padding:8px 12px;border:1px solid __BORDER__;background:__BG__;color:__FG__;line-height:1.3">
+  <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px">
+    <div id="jam" style="font-size:22px;font-weight:700;letter-spacing:0.5px">--:--:--</div>
+    <div style="font-size:11px;opacity:.7">WIB</div>
+  </div>
+  <div id="tgl" style="font-size:11px;opacity:.7"></div>
+  <div id="next" style="font-size:12px;font-weight:600;margin-top:4px"></div>
+  <div id="daftar" style="font-size:10.5px;opacity:.75;margin-top:2px"></div>
+</div>
+<script>
+(function () {
+  var JADWAL = __JADWAL__;
+  var CATATAN = __CATATAN__;
+  var GELAP = __GELAP__;
+  var NAMA = ['Subuh', 'Dzuhur', 'Ashar', 'Maghrib', 'Isya'];
+  var JENDELA_MENIT = 30;   // popup masih muncul sampai 30 menit setelah waktu sholat (jika belum ditekan OK)
+  var P = null;
+  try { P = window.parent; var tes = P.document.body; } catch (e) { P = null; }
+  var lokal = {};
+
+  var fmtJam = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Jakarta', hour12: false,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+  var fmtTgl = new Intl.DateTimeFormat('id-ID', {
+    timeZone: 'Asia/Jakarta', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+  });
+
+  function wib() {
+    var o = {};
+    fmtJam.formatToParts(new Date()).forEach(function (p) { o[p.type] = p.value; });
+    var h = parseInt(o.hour, 10) % 24, m = parseInt(o.minute, 10), s = parseInt(o.second, 10);
+    return { tgl: o.year + '-' + o.month + '-' + o.day, h: h, m: m, s: s, det: h * 3600 + m * 60 + s };
+  }
+  function p2(n) { return (n < 10 ? '0' : '') + n; }
+  function detik(str) { var p = String(str).split(':'); return parseInt(p[0], 10) * 3600 + parseInt(p[1], 10) * 60; }
+
+  function sudahAck(key) {
+    if (lokal[key]) return true;
+    try { return !!P && P.localStorage.getItem(key) === '1'; } catch (e) { return false; }
+  }
+  function setAck(key) {
+    lokal[key] = true;
+    try { if (P) P.localStorage.setItem(key, '1'); } catch (e) {}
+  }
+
+  function tampilPopup(nama, jam, key) {
+    if (!P) {
+      alert('Waktu sholat ' + nama + ' sudah sampai. Jangan lupa sholat sebentar ya.');
+      setAck(key);
+      return;
+    }
+    var D = P.document;
+    if (D.getElementById('sholat-overlay')) return;
+
+    var bg = GELAP ? '#111A2E' : '#FFFFFF';
+    var fg = GELAP ? '#F8FAFC' : '#0F172A';
+
+    var ov = D.createElement('div');
+    ov.id = 'sholat-overlay';
+    ov.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(15,23,42,.55);' +
+      'z-index:2147483000;display:flex;align-items:center;justify-content:center;' +
+      'font-family:Inter,system-ui,sans-serif;';
+
+    var card = D.createElement('div');
+    card.style.cssText = 'background:' + bg + ';color:' + fg + ';border-radius:14px;padding:26px 28px;' +
+      'max-width:380px;width:90%;text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.35);';
+
+    var judul = D.createElement('div');
+    judul.style.cssText = 'font-size:20px;font-weight:700;margin-bottom:10px;';
+    judul.textContent = 'Waktu Sholat ' + nama;
+
+    var isi = D.createElement('div');
+    isi.style.cssText = 'font-size:14px;line-height:1.5;margin-bottom:18px;opacity:.9;';
+    isi.textContent = 'Waktu sholat ' + nama + ' (' + jam + ' WIB) sudah sampai. ' +
+      'Jangan lupa sholat sebentar ya.';
+
+    var btn = D.createElement('button');
+    btn.textContent = 'OK';
+    btn.style.cssText = 'background:#36415A;color:#FFFFFF;border:1px solid #36415A;border-radius:10px;' +
+      'padding:10px 36px;font-size:15px;font-weight:600;cursor:pointer;';
+    function tutup() {
+      setAck(key);
+      if (ov.parentNode) ov.parentNode.removeChild(ov);
+    }
+    btn.addEventListener('click', tutup);
+    // cadangan: tetap bisa ditutup walau iframe jam ini sudah dimuat ulang oleh Streamlit
+    btn.setAttribute('onclick',
+      "try{localStorage.setItem('" + key + "','1');}catch(e){}" +
+      "var o=document.getElementById('sholat-overlay');if(o&&o.parentNode){o.parentNode.removeChild(o);}");
+
+    card.appendChild(judul);
+    card.appendChild(isi);
+    card.appendChild(btn);
+    ov.appendChild(card);
+    D.body.appendChild(ov);
+  }
+
+  function tick() {
+    var n = wib();
+    document.getElementById('jam').textContent = p2(n.h) + ':' + p2(n.m) + ':' + p2(n.s);
+    document.getElementById('tgl').textContent = fmtTgl.format(new Date()) + (CATATAN ? ' \u00b7 ' + CATATAN : '');
+
+    // sholat berikutnya
+    var next = null, sel = 0, i;
+    for (i = 0; i < NAMA.length; i++) {
+      var t = detik(JADWAL[NAMA[i]]);
+      if (t > n.det) { next = NAMA[i]; sel = t - n.det; break; }
+    }
+    if (!next) { next = NAMA[0]; sel = detik(JADWAL[NAMA[0]]) + 86400 - n.det; }
+    var jj = Math.floor(sel / 3600), mm = Math.floor((sel % 3600) / 60);
+    document.getElementById('next').textContent =
+      'Berikutnya: ' + next + ' ' + JADWAL[next] + ' (' + (jj > 0 ? jj + ' j ' : '') + mm + ' m lagi)';
+    document.getElementById('daftar').textContent =
+      NAMA.map(function (x) { return x + ' ' + JADWAL[x]; }).join(' \u00b7 ');
+
+    // popup jika waktu sholat sudah tiba
+    for (i = 0; i < NAMA.length; i++) {
+      var ts = detik(JADWAL[NAMA[i]]);
+      if (n.det >= ts && n.det < ts + JENDELA_MENIT * 60) {
+        var key = 'sholat_ack_' + n.tgl + '_' + NAMA[i];
+        if (!sudahAck(key)) { tampilPopup(NAMA[i], JADWAL[NAMA[i]], key); break; }
+      }
+    }
+  }
+
+  tick();
+  setInterval(tick, 1000);
+})();
+</script>
+"""
+
+def tampilkan_jam_sholat(gelap: bool = False):
+    """Tampilkan jam WIB real-time + jadwal sholat. Popup muncul otomatis saat waktu sholat tiba."""
+    import json
+    import streamlit.components.v1 as components
+
+    tgl_wib = datetime.datetime.now(WIB).strftime("%Y-%m-%d")
+    jadwal, dari_api = ambil_jadwal_sholat(tgl_wib)
+
+    kode = (
+        KODE_JAM_SHOLAT
+        .replace("__JADWAL__", json.dumps(jadwal))
+        .replace("__CATATAN__", json.dumps("" if dari_api else "jadwal perkiraan"))
+        .replace("__GELAP__", "true" if gelap else "false")
+        .replace("__BG__", "#111A2E" if gelap else "#F8FAFC")
+        .replace("__BORDER__", "#2B344A" if gelap else "#E2E8F0")
+        .replace("__FG__", "#F8FAFC" if gelap else "#0F172A")
+    )
+    components.html(kode, height=135)
+
 # --- HEADER ---
-head_c1, head_c2 = st.columns([10, 1])
+head_c1, head_c_jam, head_c2 = st.columns([6, 4, 1.3])
 with head_c1:
     st.markdown("<div class='app-header'><div><h1 class='app-title'>Sistem Manajemen Retur & Supplier</h1><div class='app-sub'>Toserba Nurja Berkah — Kelola retur, tagihan, dan laporan</div></div></div>", unsafe_allow_html=True)
+with head_c_jam:
+    tampilkan_jam_sholat(gelap=(st.session_state.theme == "Gelap"))
 with head_c2:
     jml_notif = len(notif_jatuh_tempo)
     label_notif = f"Notifikasi ({jml_notif})" if jml_notif > 0 else "Notifikasi"

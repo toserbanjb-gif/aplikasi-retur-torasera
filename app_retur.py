@@ -1,4 +1,4 @@
-# ui_theme.py  (v2)
+# ui_theme.py  (v3)
 # Modul TAMPILAN saja. Tidak ada akses Supabase / data / logika bisnis di sini.
 from urllib.parse import quote
 
@@ -90,7 +90,7 @@ def _uri(body: str, color: str) -> str:
 
 def _nav_icon_css() -> str:
     n = len(_NAV_ICONS)
-    base = f'[data-testid="stSidebar"] div[role="radiogroup"] > label:first-child:nth-last-child({n})'
+    base = f'.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label:first-child:nth-last-child({n})'
     out = [
         f'{base}::before, {base} ~ label::before {{content:"";width:18px;height:18px;flex:none;'
         "background:currentColor;-webkit-mask-size:contain;mask-size:contain;"
@@ -119,8 +119,9 @@ def _card_icon_css() -> str:
 # ------------------------------------------------------------------
 # CSS statis
 # ------------------------------------------------------------------
+_FONT_IMPORT = "@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');"
+
 _STATIC_CSS = r"""
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 html, body, .stApp, .stApp p, .stApp label, .stApp li, .stApp button, .stApp input, .stApp textarea,
 .stApp h1, .stApp h2, .stApp h3, .stApp h4, [data-testid="stMarkdownContainer"] {
   font-family: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif; }
@@ -129,8 +130,7 @@ html, body, .stApp, .stApp p, .stApp label, .stApp li, .stApp button, .stApp inp
               radial-gradient(760px 460px at -8% 0%, var(--glow2), transparent 58%), var(--bg);
   background-attachment: fixed; color: var(--text); }
 [data-testid="stHeader"] { background: transparent; }
-[data-testid="stMainBlockContainer"], .block-container { padding-top: 1.6rem; max-width: 1320px; animation: tn-in .5s ease both; }
-@keyframes tn-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+[data-testid="stMainBlockContainer"], .block-container { padding-top: 1.6rem; max-width: 1320px; }
 .stApp h1, .stApp h2, .stApp h3, .stApp h4 { color: var(--text); letter-spacing: -.02em; font-weight: 800; }
 .stApp [data-testid="stMarkdownContainer"] p { color: var(--text2); }
 .stApp [data-testid="stWidgetLabel"] p, .stApp label p { color: var(--text2); font-weight: 600; font-size: 13px; }
@@ -186,6 +186,7 @@ hr { border-color: var(--border) !important; opacity: 1; margin: 1.2rem 0 !impor
 [data-testid="stSidebar"] { background: radial-gradient(320px 240px at 0% 0%, rgba(20,184,166,.20), transparent 70%), var(--sidebar);
   border-right: 1px solid rgba(255,255,255,.06); }
 [data-testid="stSidebar"] p, [data-testid="stSidebar"] label, [data-testid="stSidebar"] span, [data-testid="stSidebar"] li { color: #CFE0E3; }
+.stApp [data-testid="stSidebar"] [data-testid="stMarkdownContainer"] p { color: #CFE0E3; }
 [data-testid="stSidebar"] .small-muted { color: #7F9AA1 !important; }
 [data-testid="stSidebar"] hr { border-color: rgba(255,255,255,.08) !important; }
 [data-testid="stSidebar"] div[style*="background:#2563EB"] {
@@ -193,24 +194,24 @@ hr { border-color: var(--border) !important; opacity: 1; margin: 1.2rem 0 !impor
   box-shadow: 0 8px 20px rgba(20,184,166,.40); letter-spacing: .02em; }
 [data-testid="stSidebar"] div[style*="color:#94A3B8"] { color: #7F9AA1 !important; }
 [data-testid="stSidebar"] div[style*="font-weight:700"] { color: #F2FAFA; }
-[data-testid="stSidebar"] div[role="radiogroup"] { gap: 3px; }
-[data-testid="stSidebar"] div[role="radiogroup"] > label {
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] { gap: 3px; }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label {
   display: flex; align-items: center; gap: 12px; width: 100%; padding: 11px 14px; margin: 0;
   border-radius: 12px; cursor: pointer; transition: background .15s ease, color .15s ease, transform .15s ease; }
-[data-testid="stSidebar"] div[role="radiogroup"] > label > div:nth-of-type(1) { display: none; }
-[data-testid="stSidebar"] div[role="radiogroup"] > label p { margin: 0; font-size: 14px; font-weight: 500; color: inherit; }
-[data-testid="stSidebar"] div[role="radiogroup"] > label:hover { background: rgba(255,255,255,.07); transform: translateX(2px); }
-[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label > div:nth-of-type(1) { display: none; }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label p { margin: 0; font-size: 14px; font-weight: 500; color: inherit; }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label:hover { background: rgba(255,255,255,.07); transform: translateX(2px); }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) {
   background: linear-gradient(90deg, rgba(45,212,191,.28), rgba(45,212,191,.06)); color: #7CF0DE; box-shadow: inset 3px 0 0 #2DD4BF; }
-[data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p { color: #7CF0DE; font-weight: 700; }
-[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) {
+.stApp [data-testid="stSidebar"] div[role="radiogroup"] > label:has(input:checked) p { color: #7CF0DE; font-weight: 700; }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) {
   flex-direction: row; gap: 4px; padding: 4px; background: rgba(255,255,255,.07); border-radius: 14px; }
-[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label {
+.stApp [data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label {
   flex: 1; justify-content: center; padding: 8px; }
-[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:hover { transform: none; }
-[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:has(input:checked) {
+.stApp [data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:hover { transform: none; }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:has(input:checked) {
   background: linear-gradient(135deg, #2DD4BF, #0F766E); box-shadow: 0 4px 12px rgba(20,184,166,.4); }
-[data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:has(input:checked) p { color: #fff; }
+.stApp [data-testid="stSidebar"] div[role="radiogroup"]:has(> label:first-child:nth-last-child(2)) > label:has(input:checked) p { color: #fff; }
 
 /* ---------- Tombol ---------- */
 .stButton > button, .stDownloadButton > button, [data-testid="stFormSubmitButton"] > button {
@@ -227,7 +228,7 @@ hr { border-color: var(--border) !important; opacity: 1; margin: 1.2rem 0 !impor
 [data-testid="stFormSubmitButton"] > button[kind="primary"]:hover,
 [data-testid="stFormSubmitButton"] > button[data-testid="stBaseButton-primary"]:hover {
   background: var(--btn_hover); color: var(--btn_text); box-shadow: 0 12px 26px rgba(15,118,110,.38); }
-.stButton > button p, .stDownloadButton > button p, [data-testid="stFormSubmitButton"] > button p { color: inherit; font-weight: 700; }
+.stApp .stButton > button p, .stApp .stDownloadButton > button p, .stApp [data-testid="stFormSubmitButton"] > button p { color: inherit; font-weight: 700; }
 [data-testid="stSidebar"] .stButton > button { background: rgba(255,255,255,.07); border-color: rgba(255,255,255,.14); color: #E3EEF0; box-shadow: none; }
 [data-testid="stSidebar"] .stButton > button:hover { background: rgba(45,212,191,.18); border-color: #2DD4BF; color: #7CF0DE; box-shadow: none; }
 
@@ -250,9 +251,9 @@ hr { border-color: var(--border) !important; opacity: 1; margin: 1.2rem 0 !impor
 [data-baseweb="tab-list"] { gap: 4px; padding: 5px; background: var(--surface2); border-radius: 14px; width: fit-content; border: none; }
 [data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { display: none !important; }
 [data-baseweb="tab"] { border-radius: 10px; padding: 9px 18px; height: auto; background: transparent; transition: all .15s ease; }
-[data-baseweb="tab"] p { font-weight: 700; color: var(--muted); font-size: 14px; }
+.stApp [data-baseweb="tab"] p { font-weight: 700; color: var(--muted); font-size: 14px; }
 [data-baseweb="tab"][aria-selected="true"] { background: var(--surface); box-shadow: 0 2px 8px rgba(15,31,41,.10); }
-[data-baseweb="tab"][aria-selected="true"] p { color: var(--accent); }
+.stApp [data-baseweb="tab"][aria-selected="true"] p { color: var(--accent); }
 
 /* ---------- Tabel, grafik, notifikasi, dialog ---------- */
 [data-testid="stDataFrame"], [data-testid="stDataEditor"] { border: 1px solid var(--border); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow); }
@@ -281,10 +282,10 @@ div[role="dialog"] { border-radius: 22px !important; background: var(--surface) 
 @keyframes tn-spin { to { transform: rotate(360deg); } }
 
 /* ---------- Loading: layar pembuka ---------- */
-.tn-splash { position: fixed; inset: 0; z-index: 9999999; display: grid; place-items: center;
+.tn-splash { position: fixed; inset: 0; z-index: 9999999; display: grid; place-items: center; pointer-events: none;
   background: radial-gradient(700px 460px at 80% 0%, var(--glow1), transparent 60%),
               radial-gradient(600px 400px at 0% 100%, var(--glow2), transparent 60%), var(--bg);
-  animation: tn-splash-out .55s ease 1.6s forwards; }
+  animation: tn-splash-out .5s ease 1.2s forwards; }
 .tn-splash-inner { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
 .tn-ring { position: relative; width: 96px; height: 96px; display: grid; place-items: center; }
 .tn-ring::before { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 3px solid var(--accent_soft);
@@ -303,7 +304,6 @@ div[role="dialog"] { border-radius: 22px !important; background: var(--surface) 
 
 @media (prefers-reduced-motion: reduce) {
   .tn-splash { animation-duration: .01ms; animation-delay: .4s; }
-  [data-testid="stMainBlockContainer"], .block-container { animation: none; }
   .tn-ring::before, .tn-ring::after, .tn-bar span, [data-testid="stSpinner"]::before { animation-duration: 2.4s; }
 }
 @media (max-width: 640px) {
@@ -327,13 +327,15 @@ def inject_theme(theme: str = "Terang") -> str:
     """Pasang seluruh CSS. Mengembalikan nama template plotly yang cocok."""
     pal = DARK if theme == "Gelap" else LIGHT
     root = ":root{" + "".join(f"--{k}:{v};" for k, v in pal.items()) + "}"
-    css = root + "\n" + _STATIC_CSS + "\n" + _nav_icon_css() + "\n" + _card_icon_css()
-    st.markdown(f"<style>\n{_compact(css)}\n</style>", unsafe_allow_html=True)
-
-    # Palet grafik Plotly (hanya warna, tidak mengubah data)
-    px.defaults.color_discrete_sequence = [
-        "#0F766E", "#F59E0B", "#6366F1", "#E11D48", "#0EA5E9", "#84CC16", "#64748B",
-    ]
+    css = _FONT_IMPORT + "\n" + root + "\n" + _STATIC_CSS + "\n" + _nav_icon_css() + "\n" + _card_icon_css()
+    try:
+        st.markdown(f"<style>\n{_compact(css)}\n</style>", unsafe_allow_html=True)
+        # Palet grafik Plotly (hanya warna, tidak mengubah data)
+        px.defaults.color_discrete_sequence = [
+            "#0F766E", "#F59E0B", "#6366F1", "#E11D48", "#0EA5E9", "#84CC16", "#64748B",
+        ]
+    except Exception:
+        pass
     return "plotly_dark" if theme == "Gelap" else "plotly"
 
 
@@ -342,6 +344,13 @@ def show_splash() -> None:
     if st.session_state.get("_tn_splash_done"):
         return
     st.session_state["_tn_splash_done"] = True
+    try:
+        _render_splash()
+    except Exception:
+        pass
+
+
+def _render_splash() -> None:
     st.markdown(
         "<div class='tn-splash'><div class='tn-splash-inner'>"
         "<div class='tn-ring'><div class='tn-logo'>TN</div></div>"
